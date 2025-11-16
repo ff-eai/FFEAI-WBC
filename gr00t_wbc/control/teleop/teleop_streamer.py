@@ -45,7 +45,9 @@ class TeleopStreamer:
                 self.body_streamer = IphoneStreamer()
                 self.body_streamer.start_streaming()
             elif body_control_device == "leapmotion":
-                from gr00t_wbc.control.teleop.streamers.leapmotion_streamer import LeapMotionStreamer
+                from gr00t_wbc.control.teleop.streamers.leapmotion_streamer import (
+                    LeapMotionStreamer,
+                )
 
                 self.body_streamer = LeapMotionStreamer()
                 self.body_streamer.start_streaming()

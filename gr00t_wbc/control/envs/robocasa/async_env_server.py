@@ -8,7 +8,9 @@ import numpy as np
 import rclpy
 
 from gr00t_wbc.control.envs.g1.sim.image_publish_utils import ImagePublishProcess
-from gr00t_wbc.control.envs.robocasa.utils.robocasa_env import Gr00tLocomanipRoboCasaEnv  # noqa: F401
+from gr00t_wbc.control.envs.robocasa.utils.robocasa_env import (
+    Gr00tLocomanipRoboCasaEnv,
+)  # noqa: F401
 from gr00t_wbc.control.robot_model.robot_model import RobotModel
 from gr00t_wbc.control.utils.keyboard_dispatcher import KeyboardListenerSubscriber
 

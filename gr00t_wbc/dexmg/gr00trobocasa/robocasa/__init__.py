@@ -26,12 +26,18 @@ from robocasa.environments.locomanipulation.locomanip_basic import (
     LMNavPickBottleShelf,
     LMPickBottleShelfLow,
     LMNavPickBottleShelfLow,
+    LMPnPBottleToPlate,
+    LMPnPAppleToPlate,
 )
 from robocasa.environments.locomanipulation.locomanip_pnp import (
     LMBottlePnP,
     LMBoxPnP,
 )
 
+from robocasa.environments.locomanipulation.locomanip_dc import (
+    LMNavPickBottleDC,
+    LMPnPAppleToPlateDC,
+)
 
 # from robosuite.controllers import ALL_CONTROLLERS, load_controller_config
 from robosuite.controllers import ALL_PART_CONTROLLERS, load_composite_controller_config

@@ -10,11 +10,14 @@ from robosuite.environments.robot_env import RobotEnv
 from scipy.spatial.transform import Rotation as R
 
 from gr00t_wbc.control.envs.g1.utils.joint_safety import JointSafetyMonitor
-from gr00t_wbc.control.envs.robocasa.utils.controller_utils import update_robosuite_controller_configs
+from gr00t_wbc.control.envs.robocasa.utils.controller_utils import (
+    update_robosuite_controller_configs,
+)
 from gr00t_wbc.control.envs.robocasa.utils.robocasa_env import (  # noqa: F401
     ALLOWED_LANGUAGE_CHARSET,
     Gr00tLocomanipRoboCasaEnv,
 )
+from gr00t_wbc.control.envs.robocasa.utils.sim_utils import change_simulation_timestep
 from gr00t_wbc.control.robot_model.instantiation import get_robot_type_and_model
 from gr00t_wbc.control.utils.n1_utils import (
     prepare_gym_space_for_eval,
@@ -35,6 +38,8 @@ class SyncEnv(gym.Env):
         _, self.robot_model = get_robot_type_and_model(
             robot_name, enable_waist_ik=kwargs.pop("enable_waist", False)
         )
+
+        change_simulation_timestep(kwargs.get("sim_freq", 1 / 0.005))
 
         env_kwargs = {
             "onscreen": kwargs.get("onscreen", True),

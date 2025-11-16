@@ -77,8 +77,7 @@ class BaseConfig(ArgsConfigTemplate):
     """Version of the whole body controller."""
 
     wbc_model_path: str = (
-        "policy/GR00T-WholeBodyControl-Balance.onnx,"
-        "policy/GR00T-WholeBodyControl-Walk.onnx"
+        "policy/GR00T-WholeBodyControl-Balance.onnx," "policy/GR00T-WholeBodyControl-Walk.onnx"
     )
     """Path to WBC model file (relative to gr00t_wbc/sim2mujoco/resources/robots/g1)"""
     """gear_wbc model path: policy/GR00T-WholeBodyControl-Balance.onnx,policy/GR00T-WholeBodyControl-Walk.onnx"""

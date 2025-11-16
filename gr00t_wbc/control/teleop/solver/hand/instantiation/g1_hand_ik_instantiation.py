@@ -1,4 +1,6 @@
-from gr00t_wbc.control.teleop.solver.hand.g1_gripper_ik_solver import G1GripperInverseKinematicsSolver
+from gr00t_wbc.control.teleop.solver.hand.g1_gripper_ik_solver import (
+    G1GripperInverseKinematicsSolver,
+)
 
 
 # initialize hand ik solvers for g1 robot
