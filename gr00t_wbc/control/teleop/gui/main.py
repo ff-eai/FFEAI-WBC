@@ -29,9 +29,7 @@ import gr00t_wbc
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 
 
-GR00T_TELEOP_DATA_ROOT = os.path.join(
-    os.path.dirname(gr00t_wbc.__file__), "./external/teleop/data"
-)
+GR00T_TELEOP_DATA_ROOT = os.path.join(os.path.dirname(gr00t_wbc.__file__), "./external/teleop/data")
 
 
 class MainWindow(QMainWindow):

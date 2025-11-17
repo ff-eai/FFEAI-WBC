@@ -12,7 +12,11 @@ import rclpy
 from scipy.spatial.transform import Rotation as R
 from std_msgs.msg import String as RosStringMsg
 
-from gr00t_wbc.control.main.constants import CONTROL_GOAL_TOPIC, KEYBOARD_INPUT_TOPIC, STATE_TOPIC_NAME
+from gr00t_wbc.control.main.constants import (
+    CONTROL_GOAL_TOPIC,
+    KEYBOARD_INPUT_TOPIC,
+    STATE_TOPIC_NAME,
+)
 from gr00t_wbc.control.utils.ros_utils import ROSMsgPublisher, ROSMsgSubscriber
 from gr00t_wbc.control.utils.term_color_constants import GREEN_BOLD, RESET, YELLOW_BOLD
 from gr00t_wbc.data.viz.rerun_viz import RerunViz

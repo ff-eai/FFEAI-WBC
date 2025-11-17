@@ -5,7 +5,9 @@ import numpy as np
 import pytest
 
 from gr00t_wbc.control.robot_model import RobotModel
-from gr00t_wbc.control.robot_model.supplemental_info.g1.g1_supplemental_info import G1SupplementalInfo
+from gr00t_wbc.control.robot_model.supplemental_info.g1.g1_supplemental_info import (
+    G1SupplementalInfo,
+)
 
 
 @pytest.fixture
@@ -17,7 +19,9 @@ def env_fixture():
     from gr00t_wbc.control.visualization.meshcat_visualizer_env import MeshcatVisualizerEnv
 
     root_dir = pathlib.Path(__file__).parent.parent.parent.parent
-    urdf_path = str(root_dir / "gr00t_wbc/control/robot_model/model_data/g1/g1_29dof_with_hand.urdf")
+    urdf_path = str(
+        root_dir / "gr00t_wbc/control/robot_model/model_data/g1/g1_29dof_with_hand.urdf"
+    )
     asset_path = str(root_dir / "gr00t_wbc/control/robot_model/model_data/g1")
     robot_config = {
         "asset_path": asset_path,
