@@ -231,6 +231,11 @@ def _process_3pt_pose(smpl_pose_np):
           orientations.
     """
 
+    # Defensive copy: _compute_rel_transform modifies pose[:3] in-place, which would
+    # corrupt the caller's array (e.g. PicoReader._latest) and cause wrong results
+    # if the same sample is processed more than once.
+    smpl_pose_np = smpl_pose_np.copy()
+
     # =========================================================================
     # STEP 1: Transform all joints from Unity frame to robot frame
     # =========================================================================
