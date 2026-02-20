@@ -1,4 +1,4 @@
-# Decoupled WBC (N1.5 / N1.6)
+# Decoupled WBC
 
 Software stack for loco-manipulation experiments across multiple humanoid platforms, with primary support for the Unitree G1. This repository provides whole-body control policies, a teleoperation stack, and a data exporter.
 
