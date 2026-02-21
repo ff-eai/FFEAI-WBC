@@ -272,10 +272,10 @@ class SimpleKeyboard : public InputInterface {
                 planner_use_movement_speed = std::min(planner_use_movement_speed, 3.0);
               } else if (planner_use_movement_mode == LocomotionMode::CRAWLING) {
                 planner_use_movement_speed = std::max(planner_use_movement_speed, 0.4);
-                planner_use_movement_speed = std::min(planner_use_movement_speed, 1.5);
+                planner_use_movement_speed = std::min(planner_use_movement_speed, 1.0);
               } else if (planner_use_movement_mode == LocomotionMode::ELBOW_CRAWLING) {
                 planner_use_movement_speed = std::max(planner_use_movement_speed, 0.7);
-                planner_use_movement_speed = std::min(planner_use_movement_speed, 1.5);
+                planner_use_movement_speed = std::min(planner_use_movement_speed, 1.0);
               } else if (planner_use_movement_mode == LocomotionMode::WALK_BOXING || 
                           planner_use_movement_mode == LocomotionMode::LEFT_PUNCH || 
                           planner_use_movement_mode == LocomotionMode::RIGHT_PUNCH || 

@@ -98,21 +98,6 @@ source .venv_teleop/bin/activate   # prompt: (gear_sonic_teleop)
 
 ## Step 4: Connect the PICO to Your Workstation
 
-:::{important}
-Before connecting the PICO, you must first launch the teleop streamer on your workstation so the PC Service has something to connect to:
-
-```bash
-source .venv_teleop/bin/activate
-python gear_sonic/scripts/pico_manager_thread_server.py --manager \
-    --vis_vr3pt --vis_smpl
-```
-
-Leave this running in a terminal throughout the setup steps below. This is part of the [VR Whole-Body Teleop tutorial](../tutorials/vr_wholebody_teleop.md).
-
-If the PICO cannot reach your workstation, check your firewall — disable it or add a rule to allow the XRoboToolkit port.
-:::
-
-
 1. Open the Wi-Fi settings on both the laptop/PC and PICO and ensure they are on the **same Wi-Fi network**. Take note of the Wi-Fi IPv4 address.
    - To find the PICO's Wi-Fi, select the control center on the bottom right of the menu.
 
@@ -138,7 +123,6 @@ If the PICO cannot reach your workstation, check your firewall — disable it or
 :width: 600px
 :align: center
 ```
-
 
 ---
 
