@@ -186,8 +186,8 @@ Height adjustable with **`-`** / **`=`** (0.2–0.8 m). Initial height defaults 
 | **1** | Squat | static |
 | **2** | Kneel (Two Legs) | static |
 | **3** | Kneel (One Leg) | static |
-| **4** | Hand Crawling | 0.4–1.5 m/s |
-| **5** | Elbow Crawling | 0.7–1.5 m/s |
+| **4** | Hand Crawling | 0.4–1.0 m/s |
+| **5** | Elbow Crawling | 0.7–1.0 m/s |
 
 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1em; margin: 1em 0;">
 <figure style="margin: 0;">
