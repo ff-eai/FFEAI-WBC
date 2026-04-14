@@ -23,6 +23,7 @@ This codebase serves as the foundation for:
 News
 ----
 
+- **[2026-04-10]** Released SONIC training checkpoint and SMPL motion data on `Hugging Face <https://huggingface.co/nvidia/GEAR-SONIC>`_ for finetuning. Includes sample data for quick start.
 - **[2026-03-16]** `BONES-SEED <https://huggingface.co/datasets/bones-studio/seed>`_ is now open-sourced! A large-scale human motion dataset (142K+ motions, ~288 hours) with Unitree G1 MuJoCo-compatible trajectories (a large subset of SONIC training data!).
 - **[2026-02-19]** Released GEAR-SONIC with pretrained policy checkpoints, C++ inference stack, VR teleoperation stack, and documentation.
 - **[2025-11-12]** Initial release of GR00T-WholeBodyControl with Decoupled WBC for GR00T N1.5 and N1.6.
@@ -77,7 +78,6 @@ Documentation
    getting_started/download_models
    getting_started/quickstart
    getting_started/vr_teleop_setup
-..    getting_started/installation_training
 
 .. toctree::
    :maxdepth: 2
@@ -88,17 +88,23 @@ Documentation
    tutorials/zmq
    tutorials/manager
    tutorials/vr_wholebody_teleop
+   tutorials/data_collection
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Training
+
+   getting_started/installation_training
+   user_guide/training
+   user_guide/training_data
+   user_guide/new_embodiments
 
 .. toctree::
    :maxdepth: 2
    :caption: Best Practices
 
    user_guide/teleoperation
-   user_guide/training_data
-
-..    user_guide/configuration
-..    user_guide/training
-..    user_guide/troubleshooting
+   user_guide/troubleshooting
 
 .. toctree::
    :maxdepth: 2
@@ -112,6 +118,9 @@ Documentation
    :caption: Reference Documentation
 
    references/index
+   user_guide/configuration
+   references/conventions
+   references/training_code
    references/deployment_code
    references/observation_config
    references/motion_reference
