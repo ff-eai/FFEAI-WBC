@@ -23,6 +23,7 @@ This codebase serves as the foundation for:
 News
 ----
 
+- **[2026-04-14]** `Live web demo <https://nvlabs.github.io/GEAR-SONIC/demo.html>`_ — try SONIC interactively in your browser. Features `Kimodo <https://github.com/nv-tlabs/kimodo>`_ text-to-motion generation.
 - **[2026-04-10]** Released **SONIC training code and checkpoint** on `HuggingFace <https://huggingface.co/nvidia/GEAR-SONIC>`_. Train from scratch or finetune. **Additional embodiment support** and **VLA data collection pipeline**. See `Training Guide <user_guide/training.html>`_.
 - **[2026-03-24]** C++ inference stack update: motor error monitoring, TTS alerts, ZMQ protocol v4, idle-mode readaptation. **ZMQ header size changed to 1280 bytes.**
 - **[2026-03-16]** `BONES-SEED <https://huggingface.co/datasets/bones-studio/seed>`_ open-sourced — 142K+ human motions (~288 hours) with G1 MuJoCo trajectories.
