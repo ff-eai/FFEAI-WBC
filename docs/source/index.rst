@@ -23,10 +23,11 @@ This codebase serves as the foundation for:
 News
 ----
 
-- **[2026-04-10]** Released SONIC training checkpoint and SMPL motion data on `Hugging Face <https://huggingface.co/nvidia/GEAR-SONIC>`_ for finetuning. Includes sample data for quick start.
-- **[2026-03-16]** `BONES-SEED <https://huggingface.co/datasets/bones-studio/seed>`_ is now open-sourced! A large-scale human motion dataset (142K+ motions, ~288 hours) with Unitree G1 MuJoCo-compatible trajectories (a large subset of SONIC training data!).
-- **[2026-02-19]** Released GEAR-SONIC with pretrained policy checkpoints, C++ inference stack, VR teleoperation stack, and documentation.
-- **[2025-11-12]** Initial release of GR00T-WholeBodyControl with Decoupled WBC for GR00T N1.5 and N1.6.
+- **[2026-04-10]** Released **SONIC training code and checkpoint** on `HuggingFace <https://huggingface.co/nvidia/GEAR-SONIC>`_. Train from scratch or finetune. **Additional embodiment support** and **VLA data collection pipeline**. See `Training Guide <user_guide/training.html>`_.
+- **[2026-03-24]** C++ inference stack update: motor error monitoring, TTS alerts, ZMQ protocol v4, idle-mode readaptation. **ZMQ header size changed to 1280 bytes.**
+- **[2026-03-16]** `BONES-SEED <https://huggingface.co/datasets/bones-studio/seed>`_ open-sourced — 142K+ human motions (~288 hours) with G1 MuJoCo trajectories.
+- **[2026-02-19]** Released GEAR-SONIC: pretrained checkpoints, C++ inference, VR teleoperation, and documentation.
+- **[2025-11-12]** Initial release with Decoupled WBC for GR00T N1.5 and N1.6.
 
 GEAR-SONIC
 ----------

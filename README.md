@@ -29,11 +29,11 @@ This is the codebase for the **GR00T Whole-Body Control (WBC)** projects. It hos
 
 ## News
 
-- **[2026-04-10]** Released SONIC training code, checkpoint, and SMPL data on [HuggingFace](https://huggingface.co/nvidia/GEAR-SONIC). Train from scratch or finetune. Added support for additional embodiments. See [Training Guide](https://nvlabs.github.io/GR00T-WholeBodyControl/user_guide/training.html).
-- **[2026-03-24]** C++ inference stack update: motor error monitoring, TTS alerts, ZMQ protocol v4, idle-mode readaptation. **ZMQ header size changed to 1280 bytes.**
-- **[2026-03-16]** [BONES-SEED](https://huggingface.co/datasets/bones-studio/seed) open-sourced — 142K+ human motions (~288 hours) with G1 MuJoCo trajectories.
-- **[2026-02-19]** Released GEAR-SONIC: pretrained checkpoints, C++ inference, VR teleoperation, and documentation.
-- **[2025-11-12]** Initial release with Decoupled WBC for GR00T N1.5 and N1.6.
+- **[2026-04-10]** 🚀 Released **SONIC training code and checkpoint** on [HuggingFace](https://huggingface.co/nvidia/GEAR-SONIC). Train from scratch or finetune. **Additional embodiment support** and **VLA data collection pipeline**. See [Training Guide](https://nvlabs.github.io/GR00T-WholeBodyControl/user_guide/training.html).
+- **[2026-03-24]** 🔧 C++ inference stack update: motor error monitoring, TTS alerts, ZMQ protocol v4, idle-mode readaptation. **ZMQ header size changed to 1280 bytes.**
+- **[2026-03-16]** 📦 [BONES-SEED](https://huggingface.co/datasets/bones-studio/seed) open-sourced — 142K+ human motions (~288 hours) with G1 MuJoCo trajectories.
+- **[2026-02-19]** 🎉 Released GEAR-SONIC: pretrained checkpoints, C++ inference, VR teleoperation, and documentation.
+- **[2025-11-12]** 🏁 Initial release with Decoupled WBC for GR00T N1.5 and N1.6.
 
 ## Table of Contents
 
