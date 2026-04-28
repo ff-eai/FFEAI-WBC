@@ -177,7 +177,7 @@ pip install -e "gear_sonic/[training]"
 pip install huggingface_hub
 python download_from_hf.py --training
 
-# Download Bones-SEED G1 CSVs from bones-studio.ai/seed, then convert and filter
+# Download Bones-SEED G1 CSVs from huggingface.co/datasets/bones-studio/seed, then convert and filter
 python gear_sonic/data_process/convert_soma_csv_to_motion_lib.py \
     --input /path/to/bones_seed/g1/csv/ \
     --output data/motion_lib_bones_seed/robot --fps 30 --fps_source 120 --individual --num_workers 16
