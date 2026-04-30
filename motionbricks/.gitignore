@@ -26,3 +26,13 @@ out/testing/
 Thumbs.db
 motionbricks/scripts/
 motionbricks/setup.py
+
+# Override monorepo root .gitignore: the motionbricks Python package uses
+# `data/` and `models/` directory names for source code, not runtime
+# artifacts. Re-include only the specific source directories.
+!motionbricks/motionbricks/data/
+!motionbricks/motionbricks/data/**
+!motionbricks/motionbricks/motion_backbone/models/
+!motionbricks/motionbricks/motion_backbone/models/**
+!motionbricks/motionbricks/vqvae/models/
+!motionbricks/motionbricks/vqvae/models/**
