@@ -25,7 +25,7 @@ class navigation_demo(object):
 
         # parse the default path if not given (very likely used by an external project)
         # Navigate from motionbricks/motion_backbone/demo/utils.py up to the project root
-        project_base_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
+        project_base_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
         if not hasattr(self.args, 'humanoid_scene_xml'):
             self.args.humanoid_scene_xml = \
                 os.path.abspath(os.path.join(project_base_path, "assets", "skeletons", "g1", "scene_29dof.xml"))

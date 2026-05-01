@@ -1,7 +1,6 @@
 # MotionBricks: Scalable Real-Time Motions with Modular Latent Generative Model and Smart Primitives
 
 <p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-76B900.svg" alt="License"></a>
   <a href="https://nvlabs.github.io/motionbricks"><img src="https://img.shields.io/badge/Project-Page-blue" alt="Project Page"></a>
   <a href="docs/motion_representation.md"><img src="https://img.shields.io/badge/docs-online-green.svg" alt="Documentation"></a>
 </p>
@@ -79,27 +78,30 @@ See the [project page](https://nvlabs.github.io/motionbricks) for the full uncut
 
 ### Clone the repository
 
-Pretrained checkpoints and mesh assets are tracked with Git LFS, so install LFS before cloning:
+MotionBricks ships as a subproject of [GR00T Whole-Body Control](https://github.com/NVlabs/GR00T-WholeBodyControl). Clone the parent repo and `cd` into `motionbricks/`. Pretrained checkpoints, mesh assets, and gallery GIFs are tracked with Git LFS, so install LFS before cloning:
 
 ```bash
 git lfs install
 ```
 
-If you only need source code (for example, to train on your own data), you can skip downloading the ~2.3 GB pretrained checkpoints:
+The parent repo skips MotionBricks pretrained checkpoints by default so a normal monorepo clone does not automatically download the extra ~2.2 GB of checkpoint files. MotionBricks GIFs and mesh assets still download normally. If you only need source code (for example, to train on your own data), clone normally:
 
 ```bash
-GIT_LFS_SKIP_SMUDGE=1 git clone <REPO_URL>
+git clone https://github.com/NVlabs/GR00T-WholeBodyControl.git
+cd GR00T-WholeBodyControl/motionbricks
+```
+
+If you want the checkpoints for the interactive demo, fetch them explicitly from the repo root:
+
+```bash
+git clone https://github.com/NVlabs/GR00T-WholeBodyControl.git
+cd GR00T-WholeBodyControl
+git lfs pull --include="motionbricks/out/**" --exclude=""
+git lfs pull --include="motionbricks/assets/skeletons/g1/meshes/**" --exclude=""  # needed for interactive demo
 cd motionbricks
 ```
 
-If you want the checkpoints for the interactive demo, clone normally:
-
-```bash
-git clone <REPO_URL>
-cd motionbricks
-```
-
-After cloning, verify that checkpoint files were downloaded (not tiny Git LFS pointer files):
+After fetching MotionBricks checkpoints, verify that checkpoint files were downloaded (not tiny Git LFS pointer files):
 
 ```bash
 ls -lh out/G1-clip.ckpt                                     # ~7.5 MB
@@ -108,7 +110,7 @@ ls -lh out/motionbricks_pose/version_1/checkpoints/*.ckpt   # ~1.6 GB
 ls -lh out/motionbricks_root/version_1/checkpoints/*.ckpt   # ~391 MB
 ```
 
-If these files are unexpectedly small (around 1 KB), they are LFS pointers. Run `git lfs pull` to fetch the actual checkpoints.
+If these files are unexpectedly small (around 1 KB), they are LFS pointers. From the repo root, run `git lfs pull --include="motionbricks/out/**" --exclude=""` to fetch the actual checkpoints.
 
 
 ### Install dependencies
@@ -256,11 +258,23 @@ motionbricks/
 
 ## Citation
 
-BibTeX coming soon.
+If you use MotionBricks in your research, please cite:
+
+```bibtex
+@misc{wang2026motionbricksscalablerealtimemotions,
+      title={MotionBricks: Scalable Real-Time Motions with Modular Latent Generative Model and Smart Primitives},
+      author={Tingwu Wang and Olivier Dionne and Michael De Ruyter and David Minor and Davis Rempe and Kaifeng Zhao and Mathis Petrovich and Ye Yuan and Chenran Li and Zhengyi Luo and Brian Robison and Xavier Blackwell and Bernardo Antoniazzi and Xue Bin Peng and Yuke Zhu and Simon Yuen},
+      year={2026},
+      eprint={2604.24833},
+      archivePrefix={arXiv},
+      primaryClass={cs.RO},
+      url={https://arxiv.org/abs/2604.24833},
+}
+```
 
 ## License
 
-Source code in this repository is licensed under **Apache 2.0**. Pretrained model weights are licensed under the **NVIDIA Open Model License**, which permits commercial use with attribution subject to the trustworthy AI requirements. See the `legal/` folder for the full terms.
+Source code in this repository is licensed under **Apache 2.0**. Pretrained model weights are licensed under the **NVIDIA Open Model License**, which permits commercial use with attribution subject to the trustworthy AI requirements.
 
 ## Contact
 

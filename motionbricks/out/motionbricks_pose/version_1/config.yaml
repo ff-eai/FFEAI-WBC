@@ -217,7 +217,7 @@ data:
   loading_mode: motion_only
 skeleton:
   base_name: g1skel34
-  folder: ${data.folder}/features/motion_rep/${motion_rep.name}_fps_${fps}/skeleton
+  folder: out/motionbricks_pose/version_1/skeleton
   t_pose: capture
   orig_prefix: ''
   name: g1skel34
@@ -226,7 +226,7 @@ motion_rep:
   name: ${skeleton.name}_dual_root_global_joints
   stats:
     _target_: motionbricks.motionlib.core.utils.stats.Stats
-    folder: ${data.folder}/features/motion_rep/${motion_rep.name}_fps_${fps}/stats
+    folder: out/motionbricks_pose/version_1/stats/motion
   _target_: motionbricks.motionlib.core.motion_reps.dual_root_global_joints.GlobalRootGlobalJoints
 fps: 30
 wandb_run: motionbricks_pose
