@@ -46,10 +46,11 @@ and serves inference over ZMQ.
 Install [Isaac-GR00T](https://github.com/NVIDIA/Isaac-GR00T) and start the server:
 
 ```bash
-# On the GPU machine
-python -m gr00t.policy.serve \
-    --model_path <path_to_your_finetuned_model> \
-    --embodiment_tag UNITREE_G1_SONIC \
+# On the GPU machine (from the Isaac-GR00T repo)
+uv run python gr00t/eval/run_gr00t_server.py \
+    --model-path /path/to/your/finetuned_model \
+    --embodiment-tag UNITREE_G1_SONIC \
+    --device cuda:0 \
     --port 5550
 ```
 
@@ -145,9 +146,11 @@ If you prefer to run each component in separate terminals:
 ### Terminal 1 — Isaac-GR00T PolicyServer (GPU machine)
 
 ```bash
-python -m gr00t.policy.serve \
-    --model_path <path_to_model> \
-    --embodiment_tag UNITREE_G1_SONIC \
+# From the Isaac-GR00T repo
+uv run python gr00t/eval/run_gr00t_server.py \
+    --model-path /path/to/your/finetuned_model \
+    --embodiment-tag UNITREE_G1_SONIC \
+    --device cuda:0 \
     --port 5550
 ```
 
