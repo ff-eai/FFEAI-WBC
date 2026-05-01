@@ -16,8 +16,7 @@ VLA policy on the Unitree G1 with SONIC whole-body control:
 ```
 
 For examples of whole-body manipulation tasks accomplished with this workflow, see the
-[GEAR-SONIC project page](https://nvlabs.github.io/GEAR-SONIC/) and the
-[VLA result videos](https://nvlabs.github.io/GEAR-SONIC/#vla-results).
+[VLA result videos on the GEAR-SONIC project page](https://nvlabs.github.io/GEAR-SONIC/#connection-to-vla-foundation-model).
 
 ## How It Works: SONIC Latent Actions
 
