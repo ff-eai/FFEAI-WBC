@@ -15,6 +15,32 @@ VLA policy on the Unitree G1 with SONIC whole-body control:
 └─────────────────┘     └─────────────────┘     └─────────────────┘
 ```
 
+For examples of whole-body manipulation tasks accomplished with this workflow, see the
+[GEAR-SONIC project page](https://nvlabs.github.io/GEAR-SONIC/) and the
+[VLA result videos](https://nvlabs.github.io/GEAR-SONIC/#vla-results).
+
+## How It Works: SONIC Latent Actions
+
+Instead of predicting raw joint angles, the VLA predicts **SONIC latent motion
+tokens** — a compact 64-dimensional representation learned by the SONIC whole-body
+controller. SONIC then decodes these latents into full-body joint commands at 50 Hz.
+
+```
+┌─────────────┐    latent tokens     ┌─────────────┐    joint commands    ┌───────┐
+│  VLA Model  │ ──────────────────►  │   SONIC     │ ──────────────────►  │ Robot │
+│ (2.5 Hz)    │   (64-dim × 40)      │  Decoder    │    (50 Hz)           │       │
+│             │                       │  (C++)      │                      │       │
+└─────────────┘                       └─────────────┘                      └───────┘
+```
+
+This means the VLA only needs to reason about *what* to do — SONIC handles the
+*how*: balance, locomotion, and smooth whole-body coordination
+all come for free from the pretrained controller. The result is a system that can
+walk, reach, grasp, and manipulate simultaneously.
+
+The full action space per inference step is 78-dimensional: 64-dim motion token +
+7-dim left hand joints + 7-dim right hand joints.
+
 ## Step 1: Data Collection
 
 Collect teleop demonstrations using VR whole-body teleoperation. The data exporter
