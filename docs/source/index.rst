@@ -91,6 +91,8 @@ Documentation
    tutorials/manager
    tutorials/vr_wholebody_teleop
    tutorials/data_collection
+   tutorials/vla_workflow
+   tutorials/vla_inference
 
 .. toctree::
    :maxdepth: 2
