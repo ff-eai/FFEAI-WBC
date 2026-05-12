@@ -1,6 +1,26 @@
 #!/bin/bash
+# install_ros.sh
+# Sets up the `teleop_ros` conda env with RoboStack ROS 2 Humble for the
+# Isaac Teleop / CloudXR ROS bridge. Pinned to Python 3.10 to compose with
+# .venv_teleop (created by install_pico.sh).
+#
+# Usage:  bash install_scripts/install_ros.sh   (run from repo root)
 
-set -e  # Exit immediately on error
+set -e
+
+ENV_NAME="${1:-teleop_ros}"
+PY_VERSION="3.10"
+
+# Source conda's shell hooks so `conda activate` works in a non-interactive script.
+source "$(conda info --base)/etc/profile.d/conda.sh"
+
+if conda env list | awk '{print $1}' | grep -qx "$ENV_NAME"; then
+    echo "♻️  Reusing existing conda env: $ENV_NAME"
+else
+    echo "🆕 Creating conda env '$ENV_NAME' with Python $PY_VERSION..."
+    conda create -n "$ENV_NAME" "python=$PY_VERSION" -y
+fi
+conda activate "$ENV_NAME"
 
 echo "🔄 Cleaning up incomplete or cached packages..."
 conda clean --packages --tarballs --yes
@@ -29,5 +49,5 @@ else
     echo "ℹ️ ROS setup already exists in ~/.bashrc"
 fi
 
-echo "🚀 Launching rviz2 to verify installation (will auto-close in 5 seconds)..."
-timeout 5s rviz2
+echo "🧪 Verifying rclpy import..."
+python -c "import rclpy; print('✅ rclpy imported')"

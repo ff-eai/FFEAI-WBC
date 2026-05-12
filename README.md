@@ -255,6 +255,7 @@ python check_environment.py
 | **Train / finetune SONIC** | Isaac Lab's Python env | [Install Isaac Lab](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/index.html), then `pip install -e "gear_sonic/[training]"` |
 | **Run MuJoCo simulation** | `.venv_sim` (auto-created) | `bash install_scripts/install_mujoco_sim.sh` |
 | **VR teleoperation** | `.venv_teleop` (auto-created) | `bash install_scripts/install_pico.sh` |
+| **Isaac Teleop / CloudXR ROS bridge** | `teleop_ros` (auto-created) | `bash install_scripts/install_ros.sh` (after `install_pico.sh`) |
 | **Collect data** | `.venv_data_collection` (auto-created) | `bash install_scripts/install_data_collection.sh` |
 | **Deploy on real robot** | C++ build | See [deployment docs](https://nvlabs.github.io/GR00T-WholeBodyControl/getting_started/installation_deploy.html) |
 
