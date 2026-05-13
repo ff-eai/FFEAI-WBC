@@ -317,9 +317,16 @@ def main() -> None:
     Usage::
 
         source .venv_teleop/bin/activate
+
+        # Setup verification: bring CloudXR up, populate ~/.cloudxr/, exit clean
+        python -m gear_sonic.utils.teleop.isaac_teleop_client --init-only
+
+        # Live print (default): poll getters and print until Ctrl+C
         python -m gear_sonic.utils.teleop.isaac_teleop_client --hz 5
     """
     import argparse
+    import sys
+    from pathlib import Path
 
     parser = argparse.ArgumentParser(
         description="Print IsaacTeleopClient getter outputs at a fixed rate."
@@ -328,9 +335,35 @@ def main() -> None:
     parser.add_argument(
         "--use-adb", action="store_true", help="Route CloudXR over USB ADB (OOB / usb-local)."
     )
+    parser.add_argument(
+        "--init-only",
+        action="store_true",
+        help=(
+            "Bring CloudXR up to populate ~/.cloudxr/ ownership + env file, "
+            "then exit. Use as a setup verification step."
+        ),
+    )
     args = parser.parse_args()
-    period = 1.0 / max(0.1, float(args.hz))
 
+    client = IsaacTeleopClient(use_adb=args.use_adb)
+    client.start_streaming()
+
+    if args.init_only:
+        # Confirm the runtime actually populated the install dir before we tear down.
+        run_env = Path.home() / ".cloudxr" / "run" / "cloudxr.env"
+        if run_env.exists():
+            print(f"[OK] CloudXR runtime initialized; {run_env} written.")
+            client.close()
+            sys.exit(0)
+        print(
+            f"[ERROR] CloudXR runtime did not populate {run_env} — check the "
+            "earlier log for IsaacTeleopClient errors.",
+            file=sys.stderr,
+        )
+        client.close()
+        sys.exit(1)
+
+    period = 1.0 / max(0.1, float(args.hz))
     pose_names = ("left_controller", "right_controller", "headset")
     key_names = ("left_trigger", "right_trigger", "left_grip", "right_grip")
     button_names = (
@@ -345,8 +378,6 @@ def main() -> None:
     )
     joy_sides = ("left", "right")
 
-    client = IsaacTeleopClient(use_adb=args.use_adb)
-    client.start_streaming()
     try:
         while True:
             t0 = time.time()
