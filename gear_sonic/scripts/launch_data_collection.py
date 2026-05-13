@@ -23,16 +23,14 @@ Prerequisites:
     - Virtual environments set up:
         bash install_scripts/install_pico.sh            -> .venv_teleop
         bash install_scripts/install_data_collection.sh -> .venv_data_collection
-        bash install_scripts/install_ros.sh             -> RoboStack env (ros2 teleop only)
     - gear_sonic_deploy built (see docs)
     - For sim: .venv_sim must exist (see install instructions)
 
 Usage (from repo root — no venv activation needed):
-    python gear_sonic/scripts/launch_data_collection.py              # real robot (default)
-    python gear_sonic/scripts/launch_data_collection.py --sim        # MuJoCo sim
-    python gear_sonic/scripts/launch_data_collection.py --no-camera-viewer  # skip viewer
-    python gear_sonic/scripts/launch_data_collection.py --pico-input-source ros2 \
-        --ros-setup-script "$CONDA_PREFIX/setup.bash"
+    python gear_sonic/scripts/launch_data_collection.py                          # real robot (default)
+    python gear_sonic/scripts/launch_data_collection.py --sim                    # MuJoCo sim
+    python gear_sonic/scripts/launch_data_collection.py --no-camera-viewer       # skip viewer
+    python gear_sonic/scripts/launch_data_collection.py --pico-input-source isaac-teleop  # in-process CloudXR / DeviceIO
 """
 
 from dataclasses import dataclass
@@ -120,7 +118,7 @@ class DataCollectionLaunchConfig:
     """Run pico_manager_thread_server with --manager flag."""
 
     pico_input_source: str = "xrt"
-    """Teleop input source for pico_manager_thread_server.py (xrt or ros2)."""
+    """Teleop input source for pico_manager_thread_server.py (xrt or isaac-teleop)."""
 
     pico_vis_vr3pt: bool = False
     """Enable VR 3-point visualization on the teleop streamer."""
@@ -130,10 +128,6 @@ class DataCollectionLaunchConfig:
 
     pico_waist_tracking: bool = False
     """Enable waist tracking on the teleop streamer."""
-
-    ros_setup_script: str = ""
-    """ROS 2 setup.bash to source when pico_input_source=ros2.
-    Leave empty to reuse $CONDA_PREFIX/setup.bash from the shell that launches tmux."""
 
     # Data exporter options
     task_prompt: str = "demo"
@@ -163,19 +157,6 @@ class DataCollectionLaunchConfig:
 
 
 SESSION_NAME = "sonic_data_collection"
-
-
-def _resolve_ros_setup_script(config: DataCollectionLaunchConfig) -> str:
-    """Pick the ROS 2 setup script used for tmux teleop panes."""
-    if config.ros_setup_script:
-        return config.ros_setup_script
-
-    conda_prefix = os.environ.get("CONDA_PREFIX", "")
-    if conda_prefix:
-        candidate = Path(conda_prefix) / "setup.bash"
-        if candidate.exists():
-            return str(candidate)
-    return ""
 
 
 def _check_prerequisites(config: DataCollectionLaunchConfig):
@@ -211,18 +192,8 @@ def _check_prerequisites(config: DataCollectionLaunchConfig):
             "(see install instructions)."
         )
 
-    if config.pico_input_source not in {"xrt", "ros2"}:
-        errors.append("--pico-input-source must be one of: xrt, ros2")
-
-    if config.pico_input_source == "ros2":
-        ros_setup_script = _resolve_ros_setup_script(config)
-        if not ros_setup_script:
-            errors.append(
-                "ROS 2 setup script not found. Activate the RoboStack env before launching, "
-                "or pass --ros-setup-script /path/to/setup.bash"
-            )
-        elif not Path(ros_setup_script).exists():
-            errors.append(f"ROS 2 setup script not found: {ros_setup_script}")
+    if config.pico_input_source not in {"xrt", "isaac-teleop"}:
+        errors.append("--pico-input-source must be one of: xrt, isaac-teleop")
 
     if errors:
         print("ERROR: Prerequisites not met:\n")
@@ -330,10 +301,7 @@ def main(config: DataCollectionLaunchConfig):
     print(f"  Wrist cameras:   {'Yes' if config.record_wrist_cameras else 'No'}")
     print(f"  Text-to-speech:  {'Yes' if config.text_to_speech else 'No'}")
     print(f"  PC IP (for PICO): {_get_local_ip()}")
-    if config.pico_input_source == "ros2":
-        print(f"  ROS setup:       {_resolve_ros_setup_script(config)}")
-    else:
-        print(f"  Teleop vis:      vr3pt={config.pico_vis_vr3pt} smpl={config.pico_vis_smpl}")
+    print(f"  Teleop vis:      vr3pt={config.pico_vis_vr3pt} smpl={config.pico_vis_smpl}")
     print("=" * 60)
 
     _create_tmux_session()
@@ -390,13 +358,8 @@ def main(config: DataCollectionLaunchConfig):
         print("WARNING: C++ deploy pane may have failed to start.")
 
     # --- Pane 2 (bottom-left): Teleop Streamer ---
-    pico_cmd = f"cd {repo_root} && "
-    if config.pico_input_source == "ros2":
-        pico_cmd += (
-            f"source \"{_resolve_ros_setup_script(config)}\" && "
-            f"export ROS_LOCALHOST_ONLY=${{ROS_LOCALHOST_ONLY:-1}} && "
-        )
-    pico_cmd += (
+    pico_cmd = (
+        f"cd {repo_root} && "
         f"source .venv_teleop/bin/activate && "
         f"python gear_sonic/scripts/pico_manager_thread_server.py "
         f"--input-source {config.pico_input_source}"

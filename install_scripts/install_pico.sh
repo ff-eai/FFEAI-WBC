@@ -112,15 +112,31 @@ fi
 
 uv pip install --no-build-isolation -e external_dependencies/XRoboToolkit-PC-Service-Pybind_X86_and_ARM64/
 
+# ── 5c. Install isaacteleop[cloudxr] for the in-process CloudXR / DeviceIO path
+#       (--input-source isaac-teleop in pico_manager_thread_server.py).
+# Hosted on pypi.nvidia.com (public index, no auth). Replaces the legacy
+# multi-container path (./scripts/run_cloudxr_via_docker.sh + teleop_ros2_ref).
+echo "[INFO] Installing isaacteleop[cloudxr]~=1.3.0 from pypi.nvidia.com …"
+uv pip install 'isaacteleop[cloudxr]~=1.3.0' --prerelease=allow \
+    --extra-index-url https://pypi.nvidia.com
+
+# Seed ~/cloudxr.env with the device profile CloudXRLauncher negotiates against.
+# Skip if the file already exists.
+if [ ! -f "$HOME/cloudxr.env" ]; then
+    echo "NV_DEVICE_PROFILE=Quest3" > "$HOME/cloudxr.env"
+    echo "[OK] Seeded $HOME/cloudxr.env with NV_DEVICE_PROFILE=Quest3"
+else
+    echo "[OK] $HOME/cloudxr.env already exists (leaving as-is)"
+fi
+
 # ── 5b, 6, 7: CycloneDDS C lib (aarch64) + sim extra + unitree_sdk2_python ────
 # Skip when:
 #   • onboard unitree-provisioned image (aarch64 + user==unitree): the image
 #     already ships CycloneDDS, sim has no display, and the on-robot deploy
 #     uses the C++ stack directly. Applies to both Orin and Thor onboards.
 #   • SKIP_SIM_AND_UNITREE=1 is set explicitly: e.g. a Thor or Orin used as a
-#     headless Isaac Teleop / CloudXR ROS publisher — the publisher path uses
-#     the separate `teleop_ros` conda env (RoboStack rclpy), so neither
-#     mujoco nor the unitree DDS bindings are on the path.
+#     headless Isaac Teleop / CloudXR streamer — neither mujoco nor the
+#     unitree DDS bindings are on that path.
 if { [ "$ARCH" = "aarch64" ] && [ "$(whoami)" = "unitree" ]; } \
    || [ "${SKIP_SIM_AND_UNITREE:-0}" = "1" ]; then
     echo "[SKIP] Skipping CycloneDDS build, sim extra & unitree_sdk2_python"

@@ -607,9 +607,16 @@ def init_hand_ik_solvers():
     return None, None
 
 
+# Readers that expose `get_controller_data()` returning the IsaacTeleop
+# controller_data dict schema (left/right trigger/squeeze, thumbstick, clicks).
+# Tuple form keeps the dispatch sites uniform if/when a second reader speaks
+# the same schema.
+_ISAAC_TELEOP_READERS = (input_readers.IsaacTeleopReader,)
+
+
 def get_controller_inputs(reader=None):
-    """Fetch controller button/trigger states from XRoboToolkit or ROS2."""
-    if isinstance(reader, input_readers.IsaacTeleopROS2Reader):
+    """Fetch controller button/trigger states from XRoboToolkit or IsaacTeleop."""
+    if isinstance(reader, _ISAAC_TELEOP_READERS):
         ctrl = reader.get_controller_data()
         if ctrl is None:
             return False, 0.0, 0.0, 0.0, 0.0
@@ -630,7 +637,7 @@ def get_controller_inputs(reader=None):
 
 def get_controller_axes(reader=None):
     """Fetch joystick axes (lx, ly, rx, ry). Falls back to zeros if not available."""
-    if isinstance(reader, input_readers.IsaacTeleopROS2Reader):
+    if isinstance(reader, _ISAAC_TELEOP_READERS):
         ctrl = reader.get_controller_data()
         if ctrl is None:
             return 0.0, 0.0, 0.0, 0.0
@@ -658,7 +665,7 @@ def get_controller_axes(reader=None):
 
 def get_menu_buttons(reader=None):
     """Fetch both menu buttons (left, right). Falls back to False if not available."""
-    if isinstance(reader, input_readers.IsaacTeleopROS2Reader):
+    if isinstance(reader, _ISAAC_TELEOP_READERS):
         return False, False
     if xrt is None:
         return False, False
@@ -677,7 +684,7 @@ def get_menu_buttons(reader=None):
 
 def get_axis_clicks(reader=None):
     """Fetch both axis click buttons (left, right). Falls back to False if not available."""
-    if isinstance(reader, input_readers.IsaacTeleopROS2Reader):
+    if isinstance(reader, _ISAAC_TELEOP_READERS):
         ctrl = reader.get_controller_data()
         if ctrl is None:
             return False, False
@@ -702,7 +709,7 @@ def get_axis_clicks(reader=None):
 
 def get_face_buttons(reader=None):
     """Fetch primary face buttons A and X. Returns (a_pressed, x_pressed)."""
-    if isinstance(reader, input_readers.IsaacTeleopROS2Reader):
+    if isinstance(reader, _ISAAC_TELEOP_READERS):
         ctrl = reader.get_controller_data()
         if ctrl is None:
             return False, False
@@ -722,7 +729,7 @@ def get_face_buttons(reader=None):
 
 def get_abxy_buttons(reader=None):
     """Fetch A,B,X,Y face buttons as booleans (a,b,x,y)."""
-    if isinstance(reader, input_readers.IsaacTeleopROS2Reader):
+    if isinstance(reader, _ISAAC_TELEOP_READERS):
         ctrl = reader.get_controller_data()
         if ctrl is None:
             return False, False, False, False
@@ -1234,7 +1241,7 @@ class PoseStreamer:
     def __init__(
         self,
         socket,
-        reader: PicoReader | input_readers.IsaacTeleopROS2Reader,
+        reader: "PicoReader | input_readers.IsaacTeleopReader",
         three_point: ThreePointPose,
         num_frames_to_send: int,
         target_fps: int,
@@ -1561,14 +1568,14 @@ class PoseStreamer:
 def _init_input_source(
     input_source: str,
     buffer_size: int,
-) -> PicoReader | input_readers.IsaacTeleopROS2Reader:
+) -> "PicoReader | input_readers.IsaacTeleopReader":
     """Create, start, and wait for readiness of the requested teleop input source."""
-    if input_source == "ros2":
-        reader = input_readers.IsaacTeleopROS2Reader(_max_queue_size=buffer_size)
+    if input_source == "isaac-teleop":
+        reader = input_readers.IsaacTeleopReader(max_queue_size=buffer_size)
         reader.start()
-        print("Using ROS2 input source, waiting for data...")
+        print("Using Isaac Teleop (in-process CloudXR / DeviceIO), waiting for data...")
         while reader.get_latest() is None:
-            print("waiting for ROS2 body data...")
+            print("waiting for Isaac Teleop body data (connect the headset to CloudXR)...")
             time.sleep(1)
         return reader
 
@@ -1710,7 +1717,7 @@ class PlannerStreamer:
     def __init__(
         self,
         socket,
-        reader: PicoReader | input_readers.IsaacTeleopROS2Reader,
+        reader: "PicoReader | input_readers.IsaacTeleopReader",
         three_point: ThreePointPose,
         poll_hz: int = 20,
         zmq_feedback_host: str = "localhost",
@@ -2238,8 +2245,11 @@ if __name__ == "__main__":
         "--input-source",
         type=str,
         default="xrt",
-        choices=["xrt", "ros2"],
-        help="Input source: 'xrt' for XRoboToolkit SDK (default), 'ros2' for IsaacTeleop ROS2 topics",
+        choices=["xrt", "isaac-teleop"],
+        help=(
+            "Input source: 'xrt' for XRoboToolkit SDK (default), "
+            "'isaac-teleop' for in-process IsaacTeleop / CloudXR DeviceIO"
+        ),
     )
     args = parser.parse_args()
 

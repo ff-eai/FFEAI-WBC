@@ -81,7 +81,7 @@ In this repo, we release SONIC's training code, deployment framework, model chec
 
 SONIC supports real-time whole-body teleoperation via PICO VR headset, enabling natural human-to-robot motion transfer for data collection and interactive control.
 
-This repo can also ingest Isaac Teleop / CloudXR data over ROS2 by launching `gear_sonic/scripts/pico_manager_thread_server.py --input-source ros2`. That path is currently documented and supported only for **G1 with a Thor backpack**. The Isaac Teleop bring-up steps are documented in [`docs/source/getting_started/isaac_teleop_publisher_setup.md`](docs/source/getting_started/isaac_teleop_publisher_setup.md).
+This repo can also drive the headset over Isaac Teleop / CloudXR by launching `gear_sonic/scripts/pico_manager_thread_server.py --input-source isaac-teleop`. The streamer hosts the CloudXR runtime in-process via `isaacteleop[cloudxr]` — no separate publisher container required. That path is currently documented and supported only for **G1 with a Thor backpack**. The Isaac Teleop bring-up steps are documented in [`docs/source/tutorials/isaac_teleop_publisher_setup.md`](docs/source/tutorials/isaac_teleop_publisher_setup.md).
 
 <div align="center">
 <table>
@@ -255,7 +255,6 @@ python check_environment.py
 | **Train / finetune SONIC** | Isaac Lab's Python env | [Install Isaac Lab](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/index.html), then `pip install -e "gear_sonic/[training]"` |
 | **Run MuJoCo simulation** | `.venv_sim` (auto-created) | `bash install_scripts/install_mujoco_sim.sh` |
 | **VR teleoperation** | `.venv_teleop` (auto-created) | `bash install_scripts/install_pico.sh` |
-| **Isaac Teleop / CloudXR ROS bridge** | `teleop_ros` (auto-created) | `bash install_scripts/install_ros.sh` (after `install_pico.sh`) |
 | **Collect data** | `.venv_data_collection` (auto-created) | `bash install_scripts/install_data_collection.sh` |
 | **Deploy on real robot** | C++ build | See [deployment docs](https://nvlabs.github.io/GR00T-WholeBodyControl/getting_started/installation_deploy.html) |
 

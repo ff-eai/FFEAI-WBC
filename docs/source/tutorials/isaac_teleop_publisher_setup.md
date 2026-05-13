@@ -1,22 +1,22 @@
-# Isaac Teleop Publisher Setup
+# Isaac Teleop Setup (CloudXR / DeviceIO, in-process)
 
-This page documents the Isaac Teleop / CloudXR bring-up for **G1 with a Thor backpack** up to the point where `GR00T-WholeBodyControl` can see `/xr_teleop/full_body` and `/xr_teleop/controller_data`.
-
-After those topics are live, continue with this repo's ROS bridge, deploy, and optional data-collection commands by following [VR Teleop Setup](../getting_started/vr_teleop_setup.md), [VR Whole-Body Teleop](../tutorials/vr_wholebody_teleop.md), or [Data Collection](../tutorials/data_collection.md).
-
-This page is a condensed, repo-specific version of the Isaac Teleop docs for:
-
-- [Quick Start](https://nvidia.github.io/IsaacTeleop/main/getting_started/quick_start.html)
-- [`examples/teleop_ros2` reference publisher](https://github.com/NVIDIA/IsaacTeleop/tree/main/examples/teleop_ros2)
+This page documents the Isaac Teleop / CloudXR bring-up for **G1 with a Thor backpack** that drives `GR00T-WholeBodyControl` directly from the headset — no separate publisher container, no host `~/.cloudxr` sharing. The CloudXR runtime is hosted **in-process** by `pico_manager_thread_server.py --input-source isaac-teleop` via the `isaacteleop[cloudxr]` Python package.
 
 ```{admonition} Scope
 :class: important
 This workflow is currently documented and supported only for **G1 + Thor backpack**.
 ```
 
+After the headset is connected to the in-process CloudXR runtime, continue with the deployment terminals in [VR Whole-Body Teleop](vr_wholebody_teleop.md) (or [Data Collection](data_collection.md)) using `--input-source isaac-teleop`.
+
+This page is a condensed, repo-specific version of the upstream Isaac Teleop docs:
+
+- [Quick Start](https://nvidia.github.io/IsaacTeleop/main/getting_started/quick_start.html)
+- [`isaacteleop[cloudxr]` Python API](https://nvidia.github.io/IsaacTeleop/main/)
+
 ## Step 1: Prepare the Thor Host
 
-Install the prerequisites on Thor:
+Install the prerequisites on Thor (skip any you've already done for the rest of the deploy):
 
 ```bash
 sudo apt install -y build-essential curl git-lfs
@@ -28,11 +28,9 @@ bash "Miniforge3-Linux-${ARCH}.sh" -b -p "$HOME/miniforge3"
 source ~/.bashrc
 
 git lfs install
-sudo usermod -aG docker $USER
-newgrp docker
 ```
 
-For Thor performance, enable the max power mode before teleoperation:
+For Thor performance, enable max power mode before teleoperation:
 
 ```bash
 sudo nvpmodel -m 0
@@ -45,119 +43,57 @@ Optional thermal / over-current check:
 cat /sys/class/hwmon/hwmon*/oc*_event_cnt
 ```
 
-## Step 2: Clone and Build Isaac Teleop Components
+## Step 2: Install `isaacteleop[cloudxr]`
 
-Clone the Isaac Teleop repo and build the ROS publisher image plus camera streamer:
-
-```bash
-git clone --recurse-submodules git@github.com:NVIDIA/IsaacTeleop.git
-cd IsaacTeleop
-
-docker build -f examples/teleop_ros2/Dockerfile -t teleop_ros2_ref .
-
-cd examples/camera_streamer
-./camera_streamer.sh build
-```
-
-## Step 3: Launch the CloudXR Runtime via Docker
-
-Start CloudXR before launching the ROS publisher:
+`install_pico.sh` (run from the [VR Teleop Setup](../getting_started/vr_teleop_setup.md) Step 3) installs the `isaacteleop[cloudxr]` package into `.venv_teleop` from the public NVIDIA index:
 
 ```bash
-cd IsaacTeleop
-./scripts/run_cloudxr_via_docker.sh
+# Already wired into install_pico.sh; shown here for reference
+uv pip install 'isaacteleop[cloudxr]~=1.3.0' --prerelease=allow \
+    --extra-index-url https://pypi.nvidia.com
 ```
 
-The script sources `scripts/setup_cloudxr_env.sh`, prepares the CloudXR runtime variables, and brings up the CloudXR stack with Docker Compose.
+It also seeds `~/cloudxr.env` with `NV_DEVICE_PROFILE=Quest3` (override by editing the file). `CloudXRLauncher` reads this on startup.
 
-Success indicators:
+(Optional) For the USB / OOB path (`--use-adb` flag on `IsaacTeleopClient`), install the helpers that route signalling and WebRTC over an ADB reverse tunnel:
 
-- Terminal output includes `CloudXR runtime: running`
-- Terminal output includes `CloudXR WSS proxy: running`
-- Logs appear under `~/.cloudxr/logs/`
-- The shared CloudXR environment is exported for follow-on terminals through the runtime env file written by `scripts/setup_cloudxr_env.sh`
+```bash
+sudo apt install -y xdg-utils android-tools-adb coturn sshpass
+# Disable the auto-started coturn so the launcher's own turnserver on
+# 127.0.0.1:3478 owns the port (see Isaac Teleop OOB docs).
+sudo systemctl disable --now coturn
+```
 
-Keep this terminal running while you connect the XR client and start the publisher.
+## Step 3: Connect the XR Client
 
-## Step 4: Connect the XR Client
+The streamer launches the CloudXR runtime as a subprocess of the Python loop the first time you start it (Step 4). Until you connect the headset, `IsaacTeleopClient.start_streaming()` will retry quietly with `"no XR session yet"`.
 
-- Open [Isaac Teleop Web Client](https://nvidia.github.io/IsaacTeleop/client/) in the headset browser
-- Enter the IP address of the Thor host running CloudXR
+- Open the [Isaac Teleop Web Client](https://nvidia.github.io/IsaacTeleop/client/) in the headset browser
+- Enter the IP address of the Thor host
 - Accept the self-signed certificate at `https://<thor-ip>:48322`
-- Return to the client page and click `Connect`
+- Return to the client page and click **Connect**
 
 For quick validation, the same client URL can also be opened in a desktop browser.
 
-If you prefer to run the WebXR client from source instead of using the hosted client, follow the CloudXR/WebXR build instructions linked from the [Isaac Teleop Quick Start](https://nvidia.github.io/IsaacTeleop/main/getting_started/quick_start.html).
+If you prefer to run the WebXR client from source instead of the hosted client, follow the CloudXR/WebXR build instructions linked from the [Isaac Teleop Quick Start](https://nvidia.github.io/IsaacTeleop/main/getting_started/quick_start.html).
 
 ```{important}
-The ROS publisher will fail to acquire OpenXR until the XR client is connected. Complete this step before starting `teleop_ros2_ref`.
+The streamer will fail to acquire OpenXR until the XR client is connected. Either connect the headset first, or start the streamer and watch for the `Isaac Teleop session initialized.` log line once you do.
 ```
 
-## Step 5: Launch the ROS Publisher
+## Step 4: Launch the Teleop Streamer
 
-Once CloudXR is running and the XR client is connected, source the CloudXR helper script from the Isaac Teleop checkout and start the ROS publisher container:
+From the **repo root** on Thor:
 
 ```bash
-cd IsaacTeleop
-source scripts/setup_cloudxr_env.sh
-
-docker run --rm --net=host --ipc=host \
-    -e XR_RUNTIME_JSON \
-    -e NV_CXR_RUNTIME_DIR \
-    -e ROS_LOCALHOST_ONLY=1 \
-    -e RMW_IMPLEMENTATION=rmw_cyclonedds_cpp \
-    -v $CXR_HOST_VOLUME_PATH:$CXR_HOST_VOLUME_PATH:ro \
-    --name teleop_ros2_ref \
-    teleop_ros2_ref \
-    --ros-args -p mode:=full_body
+source .venv_teleop/bin/activate
+python gear_sonic/scripts/pico_manager_thread_server.py --manager \
+    --input-source isaac-teleop --vis_vr3pt --vis_smpl
 ```
 
-## Step 7: Start Camera Streaming (Optional)
+Wait for the visualization window to pop up showing the Unitree G1 mesh at default angles, and watch the streamer logs for `Isaac Teleop session initialized.` — that means CloudXR + DeviceIO are both up.
 
-(Optional) Start camera streaming to view the camera feed in the headset.
-
-```bash
-cd IsaacTeleop
-source scripts/setup_cloudxr_env.sh
-cd examples/camera_streamer
-
-./camera_streamer.sh build # if you haven't already
-./camera_streamer.sh list-cameras
-```
-
-Run with local cameras streaming to the XR headset:
-
-```bash
-./camera_streamer.sh run --source local --mode xr
-```
-
-## Step 8: Validate the ROS Topics Before Starting This Repo
-
-Before launching the `GR00T-WholeBodyControl` bridge on Thor, confirm that the publisher is already live:
-
-```bash
-docker exec -it teleop_ros2_ref /bin/bash
-ros2 topic list
-ros2 topic info /xr_teleop/full_body
-ros2 topic info /xr_teleop/controller_data
-```
-
-You should see both `/xr_teleop/full_body` and `/xr_teleop/controller_data` in the active topic list.
-
-```{admonition} Local Compatibility Contract
-:class: note
-This repo expects `std_msgs/msg/ByteMultiArray` carrying msgpack payloads on both topics. The local reader in `gear_sonic/utils/teleop/input_readers.py` decodes:
-
-- full-body payloads with fields like `timestamp`, `joint_positions`, `joint_orientations`, and optional `is_active`
-- controller payloads with trigger, squeeze, thumbstick, thumbstick click, and primary/secondary face-button state
-```
-
-Once those checks pass, return to this repo's `GR00T-WholeBodyControl` instructions on Thor:
-
-- [VR Teleop Setup](../getting_started/vr_teleop_setup.md)
-- [VR Whole-Body Teleop](../tutorials/vr_wholebody_teleop.md)
-- [Data Collection](../tutorials/data_collection.md)
+For the full sim and real-robot terminal layout (C++ deploy + streamer + optional MuJoCo sim), follow [VR Whole-Body Teleop](vr_wholebody_teleop.md). The Isaac Teleop alternative blocks in that doc use the same `--input-source isaac-teleop` invocation.
 
 ## Troubleshooting
 
@@ -165,19 +101,18 @@ Once those checks pass, return to this repo's `GR00T-WholeBodyControl` instructi
 
 In this setup, that error usually means the XR client is not connected yet. Re-check:
 
-- CloudXR runtime is still running
-- The headset or web client is fully connected
-- `source scripts/setup_cloudxr_env.sh` has been applied in the current shell before starting `teleop_ros2_ref`
+- The headset / web client is fully connected to `https://<thor-ip>:48322`
+- The CloudXR runtime subprocess is still alive (look for the `Isaac Teleop session initialized.` log)
+- `~/cloudxr.env` exists and has the right `NV_DEVICE_PROFILE` for your headset
 
-### `/xr_teleop/*` topics are missing
+### `isaacteleop` import error
 
-Check the sequence again:
+Re-run `install_pico.sh` to reinstall `isaacteleop[cloudxr]~=1.3.0` into `.venv_teleop`. If `pypi.nvidia.com` is unreachable, check your network and the `--extra-index-url` flag.
 
-1. CloudXR runtime is running
-2. XR client is connected
-3. `teleop_ros2_ref` is running with `mode:=full_body`
-4. You are checking the topics from the same ROS environment where the publisher is visible
+### Body data not arriving
 
-### This repo cannot see the topics
+The streamer logs `[IsaacTeleopReader] No DeviceIO data for 5.0s, flagging disconnect` if the headset stops feeding body data. Confirm:
 
-Do not assume distributed ROS2 discovery is configured. This page uses `ROS_LOCALHOST_ONLY=1` on both the publisher and `GR00T-WholeBodyControl` bridge, so run both on the same Thor host and in the same local ROS environment where `ros2 topic list` already shows `/xr_teleop/full_body` and `/xr_teleop/controller_data`.
+1. The headset is still connected to CloudXR (Step 3).
+2. The Pico body trackers are paired and calibrated (see [VR Teleop Setup → Motion Tracker Setup](../getting_started/vr_teleop_setup.md)).
+3. The first time the schema runs, watch for `[IsaacTeleopReader] Unrecognised body_data schema: type=...` — if you see it, the upstream `FullBodyTrackerPico.get_body_pose().data` shape changed and `_body_data_to_24x7()` in `gear_sonic/utils/teleop/input_readers.py` needs an extra branch for the new layout.

@@ -4,7 +4,7 @@ Full whole-body teleoperation using PICO VR headset and controllers. To teleop, 
 
 ```{admonition} Isaac Teleop / CloudXR Scope
 :class: note
-The same `zmq_manager` workflow can also ingest Isaac Teleop ROS2 topics by launching `gear_sonic/scripts/pico_manager_thread_server.py --input-source ros2`. That path is currently supported only for **G1 with a Thor backpack**; a regular G1 setup is not supported yet.
+The same `zmq_manager` workflow can also drive the headset through Isaac Teleop / CloudXR by launching `gear_sonic/scripts/pico_manager_thread_server.py --input-source isaac-teleop`. The streamer hosts the CloudXR runtime in-process via `isaacteleop[cloudxr]` — no separate publisher container required. That path is currently supported only for **G1 with a Thor backpack**; a regular G1 setup is not supported yet.
 ```
 
 ```{admonition} Safety Warning
@@ -22,7 +22,7 @@ You **must wear tight-fitting pants or leggings** to guarantee line-of-sight for
 ## Prerequisites
 
 1. **Completed the [Quick Start](../getting_started/quickstart.md)** — you can run the sim2sim loop (includes [installing the deployment](../getting_started/installation_deploy.md) and [downloading model checkpoints](../getting_started/download_models.md)).
-2. **Completed the [VR Teleop Setup](../getting_started/vr_teleop_setup.md)** — `.venv_teleop` is ready. For the default path, PICO hardware is installed, calibrated, and connected. For Isaac Teleop / CloudXR, also install and source the separate RoboStack ROS environment described there.
+2. **Completed the [VR Teleop Setup](../getting_started/vr_teleop_setup.md)** — `.venv_teleop` is ready. For the default path, PICO hardware is installed, calibrated, and connected. For Isaac Teleop / CloudXR, the `isaacteleop[cloudxr]` package is also installed (handled by `install_pico.sh`) and the headset connects to the in-process CloudXR runtime — see [Isaac Teleop Setup](isaac_teleop_publisher_setup.md).
 
 ---
 
@@ -86,19 +86,16 @@ python gear_sonic/scripts/pico_manager_thread_server.py --manager \
 # python gear_sonic/scripts/pico_manager_thread_server.py --manager
 ```
 
-**Isaac Teleop / CloudXR alternative** (**G1 + Thor backpack only**):
+**Isaac Teleop / CloudXR alternative** (**G1 + Thor backpack only**) — connects the headset over CloudXR (no XRoboToolKit PC service required); the streamer launches the CloudXR runtime in-process via `isaacteleop[cloudxr]`:
 
 ```bash
-conda activate teleop_ros
-source "$CONDA_PREFIX/setup.bash"
 source .venv_teleop/bin/activate
-export ROS_LOCALHOST_ONLY=1
 
 python gear_sonic/scripts/pico_manager_thread_server.py --manager \
-    --input-source ros2 --vis_vr3pt --vis_smpl
+    --input-source isaac-teleop --vis_vr3pt --vis_smpl
 ```
 
-When you turn on the visualization, wait for a window to pop up showing a Unitree G1 mesh with all joints at the default angles. If no window shows up on the default PICO path, double-check the PICO's XRoboToolKit IP configuration in the [VR Teleop Setup](../getting_started/vr_teleop_setup.md). If you are using Isaac Teleop instead, verify that `/xr_teleop/full_body` and `/xr_teleop/controller_data` are being published before starting the teleop streamer.
+When you turn on the visualization, wait for a window to pop up showing a Unitree G1 mesh with all joints at the default angles. If no window shows up on the default PICO path, double-check the PICO's XRoboToolKit IP configuration in the [VR Teleop Setup](../getting_started/vr_teleop_setup.md). If you are using Isaac Teleop instead, verify the headset is connected to the in-process CloudXR runtime — see [Isaac Teleop Setup](isaac_teleop_publisher_setup.md) for connection steps.
 
 ### Your First Teleop Session
 
@@ -343,18 +340,15 @@ python gear_sonic/scripts/pico_manager_thread_server.py --manager
 #   --vis_vr3pt --vis_smpl
 ```
 
-**Isaac Teleop / CloudXR alternative** (**G1 + Thor backpack only**):
+**Isaac Teleop / CloudXR alternative** (**G1 + Thor backpack only**) — in-process CloudXR runtime via `isaacteleop[cloudxr]`, no XRoboToolKit PC service required:
 
 ```bash
-conda activate teleop_ros
-source "$CONDA_PREFIX/setup.bash"
 source .venv_teleop/bin/activate
-export ROS_LOCALHOST_ONLY=1
-python gear_sonic/scripts/pico_manager_thread_server.py --manager --input-source ros2
+python gear_sonic/scripts/pico_manager_thread_server.py --manager --input-source isaac-teleop
 ```
 
 ```{note}
-Update the IP in the PICO's XRoboToolKit app to match this machine before starting the default PICO path. For Isaac Teleop, make sure the Thor-backpack ROS publisher is already streaming `/xr_teleop/full_body` and `/xr_teleop/controller_data`.
+Update the IP in the PICO's XRoboToolKit app to match this machine before starting the default PICO path. For Isaac Teleop, make sure the headset is connected to the in-process CloudXR runtime — see [Isaac Teleop Setup](isaac_teleop_publisher_setup.md).
 ```
 
 Follow the same start sequence: calibration pose → **A+B+X+Y** → **A+X** for POSE mode. See [Complete PICO Controls](#pico-controls) for all available commands.
