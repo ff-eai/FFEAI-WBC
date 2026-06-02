@@ -518,6 +518,18 @@ python gear_sonic/scripts/process_dataset.py \
     --output-path outputs/my_dataset_cleaned
 ```
 
+```{warning}
+If you collected data using **VR 3-point tracking mode** (VR_3PT), the
+`teleop.smpl_pose` column will be all zeros because VR_3PT uses raw VR
+positions/orientations instead of SMPL body parameters. In this case, you
+**must** disable SMPL cleaning to avoid dropping all frames:
+
+    python gear_sonic/scripts/process_dataset.py \
+        --dataset-path outputs/my_dataset \
+        --output-path outputs/my_dataset_cleaned \
+        --no-remove-stale-smpl
+```
+
 ### Merge Multiple Datasets
 
 Combine several recording sessions into a single dataset.  The script
