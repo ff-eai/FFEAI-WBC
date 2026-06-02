@@ -366,7 +366,7 @@ There are two ways to control recording: **PICO VR controllers** (recommended du
 | Input | Action |
 |---|---|
 | **Left Grip + A** | **Toggle** recording — starts a new episode, or stops and saves the current one |
-| **Left Grip + B** | **Discard** the current episode without saving |
+| **Left Grip + B** | **Discard** the current episode (saved to disk but flagged for removal during post-processing) |
 
 These buttons work in any manager mode (POSE, PLANNER, etc.) and are independent of the mode-switching controls.
 
@@ -375,7 +375,7 @@ These buttons work in any manager mode (POSE, PLANNER, etc.) and are independent
 | Key | Action |
 |---|---|
 | `c` | **Toggle** recording (same as Left Grip + A) |
-| `x` | **Discard** episode (same as Left Grip + B) |
+| `x` | **Discard** episode (same as Left Grip + B — flagged for removal) |
 
 ```{note}
 Keyboard commands are sent via a separate ZMQ publisher (default port `5580`). The data exporter subscribes to this channel automatically. You can send keys from any ZMQ publisher on that port, or integrate with the C++ deployment's keyboard handler.
@@ -485,6 +485,21 @@ All commands below run in the **data collection virtual environment**:
 ```bash
 source .venv_data_collection/bin/activate
 ```
+
+### Remove Discarded Episodes
+
+Episodes discarded during collection (`x` key or Left Grip + B) are saved to disk
+but flagged in `meta/info.json`. By default, the processing script removes these
+flagged episodes so they are excluded from fine-tuning:
+
+```bash
+# Clean a single dataset (removes discarded episodes + stale SMPL frames)
+python gear_sonic/scripts/process_dataset.py \
+    --dataset-path outputs/my_dataset \
+    --output-path outputs/my_dataset_cleaned
+```
+
+To keep discarded episodes (e.g., for inspection), pass `--no-remove-discarded`.
 
 ### Remove Stale SMPL Frames
 
