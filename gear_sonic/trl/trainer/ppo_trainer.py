@@ -1910,8 +1910,10 @@ class TRLPPOTrainer(PPOTrainer):  # noqa: F405
             self.lr_scheduler.step()
 
             del metrics, rollout_data
-            gc.collect()
-            torch.cuda.empty_cache()
+            # Skip pre-iteration GC here; motion loading performs fallback cleanup,
+            # which avoids extra synchronization overhead and improves training speed.
+            # gc.collect()
+            # torch.cuda.empty_cache()
 
             self.control = self.callback_handler.on_step_end(args, self.state, self.control)
 
