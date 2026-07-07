@@ -146,13 +146,14 @@ If you do not see correct output for your camera, you may need to modify the clo
   - To see full details on formats and available resolutions:  "v4l2-ctl --device=/dev/video0 --list-formats-ext"
 Once you have this information, make sure the settings in your yaml config match.
 
-### Final Camera Streaming Command
+### XR Camera Streaming Command
 
 Once you are certain you have valid yaml configured, shut down any preview windows and run instead with "--mode xr", which will stream frames to Isaac Teleop:
 
 ```bash
 ./camera_viz.sh run configs/[YOUR_CAMERA].yaml --mode xr
 ```
+This should also be consistent with the [instructions found at IsaacTeleop](https://nvidia.github.io/IsaacTeleop/main/references/camera_streaming.html).
 
 ## Troubleshooting
 
