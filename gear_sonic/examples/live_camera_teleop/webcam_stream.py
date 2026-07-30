@@ -11,7 +11,10 @@ Requires GEM-X (https://github.com/NVlabs/GEM-X) installed separately. Point to
 its repo root with --gemx-root or the GEMX_ROOT environment variable.
 
 Examples:
-    # camera-only sanity check (no robot), saves an overlay video
+    # camera-only sanity check (no robot): live overlay window
+    python webcam_stream.py --gemx-root /path/to/GEM-X --source 0 --kp-only --show
+
+    # same, headless: write an overlay clip instead
     python webcam_stream.py --gemx-root /path/to/GEM-X --source 0 \
         --kp-only --save webcam_test.mp4 --max-frames 60
 
@@ -22,11 +25,11 @@ Examples:
 
 # ruff: noqa: E402
 import argparse
+from collections import deque
 import os
+from pathlib import Path
 import sys
 import time
-from collections import deque
-from pathlib import Path
 
 os.environ.setdefault("PYOPENGL_PLATFORM", "egl")
 os.environ.setdefault("EGL_PLATFORM", "surfaceless")
@@ -50,16 +53,18 @@ def _add_gemx_to_path() -> str | None:
 GEMX_ROOT = _add_gemx_to_path()
 
 import cv2
-import numpy as np
 import torch
 
 try:
-    from scripts.demo.demo_soma_onnx import (
-        load_denoiser, load_vitpose, run_denoiser_onnx, run_vitpose_onnx,
-    )
     from gem.utils.cam_utils import estimate_K
     from gem.utils.geo_transform import compute_cam_angvel, get_bbx_xys_from_xyxy
     from gem.utils.pylogger import Log
+    from scripts.demo.demo_soma_onnx import (
+        load_denoiser,
+        load_vitpose,
+        run_denoiser_onnx,
+        run_vitpose_onnx,
+    )
 except ModuleNotFoundError as e:
     raise SystemExit(
         "GEM-X not found (%s). Install https://github.com/NVlabs/GEM-X and pass "
@@ -70,10 +75,32 @@ except ModuleNotFoundError as e:
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 
-def _open_source(source: str):
-    cap = cv2.VideoCapture(int(source)) if source.isdigit() else cv2.VideoCapture(source)
+def _open_source(source: str, resolution=None, cap_fps=None, fourcc="MJPG"):
+    """Open a webcam index or video file, optionally requesting a capture mode.
+
+    Cameras silently ignore unsupported settings, so the negotiated mode must be
+    read back rather than assumed.
+    """
+    is_camera = source.isdigit()
+    cap = cv2.VideoCapture(int(source)) if is_camera else cv2.VideoCapture(source)
     if not cap.isOpened():
-        raise RuntimeError(f"Could not open video source: {source}")
+        raise RuntimeError(
+            f"Could not open video source: {source}. For a camera, check the index "
+            "(ls /dev/video*), that no other process holds the device, and that you "
+            "are in the 'video' group."
+        )
+    if is_camera:
+        if fourcc:
+            cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*fourcc))
+        if resolution:
+            try:
+                w, h = (int(v) for v in resolution.lower().split("x"))
+            except ValueError:
+                raise SystemExit(f"--resolution must look like 1280x720, got {resolution!r}")
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, w)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, h)
+        if cap_fps:
+            cap.set(cv2.CAP_PROP_FPS, cap_fps)
     return cap
 
 
@@ -87,6 +114,7 @@ class GemWebcamStreamer:
         self.device = device
 
         from gem.utils.yolox_detector import YOLOXDetector
+
         self.yolox = YOLOXDetector(device=device)
 
         self.vitpose_runner, self.vitpose_backend = load_vitpose()
@@ -102,19 +130,26 @@ class GemWebcamStreamer:
     def _ensure_decoder(self, ckpt_path=None):
         if self._endecoder is not None:
             return
+        from gem.pipeline.gem_pipeline import get_body_params_w_Rt_v2
         import hydra
         from hydra import compose, initialize_config_dir
-        from gem.pipeline.gem_pipeline import get_body_params_w_Rt_v2
 
         cfg_dir = str(Path(self.gemx_root) / "configs")
         with initialize_config_dir(version_base="1.3", config_dir=cfg_dir):
-            cfg = compose(config_name="demo_soma", overrides=[
-                "exp=gem_soma_regression", "video_name=stream", "video_path=stream",
-                "use_wandb=false", "task=test",
-            ])
+            cfg = compose(
+                config_name="demo_soma",
+                overrides=[
+                    "exp=gem_soma_regression",
+                    "video_name=stream",
+                    "video_path=stream",
+                    "use_wandb=false",
+                    "task=test",
+                ],
+            )
         model = hydra.utils.instantiate(cfg.model, _recursive_=False)
         if ckpt_path is None:
             from gem.utils.hf_utils import download_checkpoint
+
             ckpt_path = download_checkpoint()
         model.load_pretrained_model(ckpt_path)
         model = model.eval().to(self.device)
@@ -125,6 +160,7 @@ class GemWebcamStreamer:
 
     def detect_bbox(self, frame_bgr, W, H):
         from gem.utils.yolox_detector import detect_and_track
+
         bbx_xyxy_np, _ = detect_and_track(frame_bgr[None], self.yolox)
         bbx_xyxy = torch.from_numpy(bbx_xyxy_np).float()
         bbx_xyxy[:, [0, 2]] = bbx_xyxy[:, [0, 2]].clamp(0, W - 1)
@@ -138,10 +174,9 @@ class GemWebcamStreamer:
             self.K = estimate_K(W, H)
 
         bbx_xys = self.detect_bbox(frame_rgb, W, H)
-        vitpose = run_vitpose_onnx(self.vitpose_runner, self.vitpose_backend,
-                                   frame_rgb[None], bbx_xys[None])
+        vitpose = run_vitpose_onnx(self.vitpose_runner, self.vitpose_backend, frame_rgb[None], bbx_xys[None])
         kp2d = vitpose[0] if isinstance(vitpose, tuple) else vitpose
-        kp2d = torch.as_tensor(kp2d)[0]                   # [77,3]
+        kp2d = torch.as_tensor(kp2d)[0]  # [77,3]
 
         self.buf_kp2d.append(kp2d)
         self.buf_bbx.append(bbx_xys)
@@ -152,19 +187,17 @@ class GemWebcamStreamer:
         obs = torch.stack(list(self.buf_kp2d)).unsqueeze(0)
         bbx = torch.stack(list(self.buf_bbx)).unsqueeze(0)
         K = self.K.repeat(L, 1, 1).unsqueeze(0)
-        f_imgseq = torch.zeros(1, L, 1024)                # no-imgfeat
+        f_imgseq = torch.zeros(1, L, 1024)  # no-imgfeat
         cam_angvel = compute_cam_angvel(torch.eye(3).repeat(L, 1, 1)).unsqueeze(0)  # static cam
 
-        batch = {"obs": obs, "bbx_xys": bbx, "K_fullimg": K,
-                 "f_imgseq": f_imgseq, "f_cam_angvel": cam_angvel}
+        batch = {"obs": obs, "bbx_xys": bbx, "K_fullimg": K, "f_imgseq": f_imgseq, "f_cam_angvel": cam_angvel}
         pred_x, _pred_cam = run_denoiser_onnx(self.denoiser_runner, self.denoiser_backend, batch)
 
         self._ensure_decoder()
         decode_dict = self._endecoder.decode(pred_x)
 
-        # WORLD (gravity-aligned) root orientation, like the offline pipeline.
-        # decode_dict["global_orient"] is camera-frame; fuse to gravity-view so the
-        # robot doesn't pitch/tip to a tilted camera "up".
+        # decode_dict["global_orient"] is camera-frame; fuse to the gravity-aligned
+        # view so the robot doesn't pitch to match a tilted camera "up".
         world_global_orient = decode_dict["global_orient"][0, -1].cpu()  # fallback
         if "global_orient_gv" in decode_dict and "local_transl_vel" in decode_dict:
             gp = self._get_body_params_w_Rt_v2(
@@ -175,11 +208,12 @@ class GemWebcamStreamer:
             )
             world_global_orient = gp["global_orient"][0, -1].cpu()
 
-        soma = {"body_pose": decode_dict["body_pose"][0, -1].cpu(),
-                "global_orient": world_global_orient}
-        for k in ("identity_coeffs", "scale_params"):
-            if k in decode_dict:
-                soma[k] = decode_dict[k][0, -1].cpu()
+        soma = {
+            "body_pose": decode_dict["body_pose"][0, -1].cpu(),
+            "global_orient": world_global_orient,
+            "identity_coeffs": decode_dict["identity_coeffs"][0, -1].cpu(),
+            "scale_params": decode_dict["scale_params"][0, -1].cpu(),
+        }
         return kp2d, soma
 
 
@@ -194,6 +228,13 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--gemx-root", default=GEMX_ROOT, help="GEM-X repo root (or set $GEMX_ROOT)")
     ap.add_argument("--source", default="0", help="Webcam index (e.g. 0) or video file path")
+    ap.add_argument("--resolution", default=None, help="Request capture resolution for a camera, e.g. 1280x720")
+    ap.add_argument(
+        "--cap-fps",
+        type=float,
+        default=None,
+        help="Request capture fps for a camera (see v4l2-ctl --list-formats-ext)",
+    )
     ap.add_argument("--window", type=int, default=120, help="Rolling window length")
     ap.add_argument("--no-imgfeat", action="store_true", help="Skip SAM3DB image features (faster)")
     ap.add_argument("--kp-only", action="store_true", help="2D keypoints only (skip denoiser/decode)")
@@ -202,30 +243,41 @@ def main():
     ap.add_argument("--save", default=None, help="Optional path to save 2D-overlay preview mp4")
     ap.add_argument("--stream-sonic", action="store_true", help="Publish SMPL v3 stream to SONIC")
     ap.add_argument("--port", type=int, default=5556, help="ZMQ PUB port for SONIC stream")
-    ap.add_argument("--sonic-root", default=None, help="SONIC repo root (only if run outside the repo)")
-    ap.add_argument("--smooth", type=float, default=0.75,
-                    help="Temporal smoothing of streamed SMPL (0=off, 0.6-0.85 smoother)")
+    ap.add_argument(
+        "--sonic-root",
+        default=os.environ.get("SONIC_ROOT"),
+        help="SONIC repo root, or set $SONIC_ROOT (only needed when run outside the repo)",
+    )
+    ap.add_argument(
+        "--smooth", type=float, default=0.75, help="Temporal smoothing of streamed SMPL (0=off, 0.6-0.85 smoother)"
+    )
     args = ap.parse_args()
 
     if not args.gemx_root:
         raise SystemExit("Provide --gemx-root <GEM-X repo root> or set GEMX_ROOT.")
 
-    cap = _open_source(args.source)
+    cap = _open_source(args.source, resolution=args.resolution, cap_fps=args.cap_fps)
     W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or 640
     H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 480
     src_fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-    Log.info(f"[webcam] source={args.source} {W}x{H} @ ~{src_fps:.1f}fps")
+    Log.info(f"[webcam] source={args.source} negotiated {W}x{H} @ ~{src_fps:.1f}fps")
+    if args.resolution and f"{W}x{H}" != args.resolution.lower():
+        Log.info(f"[webcam] note: requested {args.resolution}, camera gave {W}x{H}")
 
-    streamer = GemWebcamStreamer(args.gemx_root, window=args.window,
-                                 no_imgfeat=args.no_imgfeat or True)
+    streamer = GemWebcamStreamer(args.gemx_root, window=args.window, no_imgfeat=args.no_imgfeat or True)
 
     converter, publisher = None, None
     if args.stream_sonic:
-        from soma_to_smpl import SomaToSmpl, SonicV3Publisher
         from gem.utils.soma_utils.soma_layer import SomaLayer
-        soma_layer = SomaLayer(data_root=str(Path(args.gemx_root) / "inputs" / "soma_assets"),
-                               low_lod=True, device="cuda",
-                               identity_model_type="mhr", mode="warp")
+        from soma_to_smpl import SomaToSmpl, SonicV3Publisher
+
+        soma_layer = SomaLayer(
+            data_root=str(Path(args.gemx_root) / "inputs" / "soma_assets"),
+            low_lod=True,
+            device="cuda",
+            identity_model_type="mhr",
+            mode="warp",
+        )
         converter = SomaToSmpl(soma_layer, device="cuda", smooth=args.smooth, sonic_root=args.sonic_root)
         publisher = SonicV3Publisher(port=args.port, sonic_root=args.sonic_root)
         Log.info(f"[webcam] streaming SMPL v3 to SONIC on tcp://*:{args.port}")
@@ -251,8 +303,11 @@ def main():
             now = time.time()
             inst_fps = 1.0 / max(1e-6, now - t_last)
             t_last = now
-            print(f"\r[webcam] frame {n} | {inst_fps:5.1f} fps | "
-                  f"soma={'yes' if soma else 'warmup/kp-only'}", end="", flush=True)
+            print(
+                f"\r[webcam] frame {n} | {inst_fps:5.1f} fps | " f"soma={'yes' if soma else 'warmup/kp-only'}",
+                end="",
+                flush=True,
+            )
 
             if writer is not None or args.show:
                 vis = _draw_overlay(frame_bgr, kp2d)

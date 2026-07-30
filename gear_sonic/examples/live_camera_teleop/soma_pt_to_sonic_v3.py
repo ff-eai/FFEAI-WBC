@@ -15,13 +15,11 @@ Example:
 """
 
 import argparse
-import functools
 import os
+from pathlib import Path
 import sys
 import time
-from pathlib import Path
 
-import numpy as np
 import torch
 
 
@@ -39,7 +37,6 @@ def _add_gemx_to_path() -> str | None:
 
 GEMX_ROOT = _add_gemx_to_path()
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling modules
-torch.load = functools.partial(torch.load, weights_only=False)
 
 
 def main():
@@ -50,7 +47,11 @@ def main():
     ap.add_argument("--fps", type=float, default=30.0)
     ap.add_argument("--loop", action="store_true")
     ap.add_argument("--max-frames", type=int, default=0)
-    ap.add_argument("--sonic-root", default=None, help="SONIC repo root (only if run outside the repo)")
+    ap.add_argument(
+        "--sonic-root",
+        default=os.environ.get("SONIC_ROOT"),
+        help="SONIC repo root, or set $SONIC_ROOT (only needed when run outside the repo)",
+    )
     ap.add_argument("--smooth", type=float, default=0.0, help="Temporal smoothing (0=off)")
     ap.add_argument("--dry-run", action="store_true", help="Convert frame 0 and print, no ZMQ")
     args = ap.parse_args()
@@ -67,13 +68,19 @@ def main():
         )
     from soma_to_smpl import SomaToSmpl, SonicV3Publisher
 
-    pred = torch.load(args.pt)
+    # hpe_results.pt holds non-tensor objects, so weights_only=False is required.
+    pred = torch.load(args.pt, weights_only=False)
     g = pred["body_params_global"]
     T = g["body_pose"].shape[0]
     print(f"[soma->v3] loaded {T} frames from {args.pt}")
 
-    soma = SomaLayer(data_root=str(Path(args.gemx_root) / "inputs" / "soma_assets"),
-                     low_lod=True, device="cuda", identity_model_type="mhr", mode="warp")
+    soma = SomaLayer(
+        data_root=str(Path(args.gemx_root) / "inputs" / "soma_assets"),
+        low_lod=True,
+        device="cuda",
+        identity_model_type="mhr",
+        mode="warp",
+    )
     conv = SomaToSmpl(soma, device="cuda", smooth=args.smooth, sonic_root=args.sonic_root)
 
     def frame_at(t):

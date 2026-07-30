@@ -31,11 +31,30 @@ import torch
 
 # Canonical SMPL 24 joint names (SMPL body kinematic tree order).
 SMPL_24_NAMES = [
-    "pelvis", "left_hip", "right_hip", "spine1", "left_knee", "right_knee",
-    "spine2", "left_ankle", "right_ankle", "spine3", "left_foot", "right_foot",
-    "neck", "left_collar", "right_collar", "head", "left_shoulder",
-    "right_shoulder", "left_elbow", "right_elbow", "left_wrist", "right_wrist",
-    "left_hand", "right_hand",
+    "pelvis",
+    "left_hip",
+    "right_hip",
+    "spine1",
+    "left_knee",
+    "right_knee",
+    "spine2",
+    "left_ankle",
+    "right_ankle",
+    "spine3",
+    "left_foot",
+    "right_foot",
+    "neck",
+    "left_collar",
+    "right_collar",
+    "head",
+    "left_shoulder",
+    "right_shoulder",
+    "left_elbow",
+    "right_elbow",
+    "left_wrist",
+    "right_wrist",
+    "left_hand",
+    "right_hand",
 ]
 
 # Aliases mapping canonical SMPL joints -> SOMA rig joint names (Maya-style).
@@ -97,9 +116,7 @@ def build_soma_to_smpl_index(soma_joint_names: list[str]) -> list[int]:
 
 
 # Y-up -> Z-up rotation (+90 deg about X): same as smpl_root_ytoz_up on points.
-_YUP_TO_ZUP = torch.tensor(
-    [[1.0, 0.0, 0.0], [0.0, 0.0, -1.0], [0.0, 1.0, 0.0]], dtype=torch.float32
-)
+_YUP_TO_ZUP = torch.tensor([[1.0, 0.0, 0.0], [0.0, 0.0, -1.0], [0.0, 1.0, 0.0]], dtype=torch.float32)
 
 
 class SomaToSmpl:
@@ -121,16 +138,19 @@ class SomaToSmpl:
         self.smpl_idx = build_soma_to_smpl_index(names)
         self._R_up = _YUP_TO_ZUP.to(device)
 
-        # SONIC's EXACT SMPL convention helpers (native import inside the repo).
-        import sys
+        # Deferred: sonic_root must be on sys.path before gear_sonic resolves.
         if sonic_root and sonic_root not in sys.path:
             sys.path.insert(0, sonic_root)
-        from gear_sonic.trl.utils.torch_transform import (
-            angle_axis_to_quaternion, quat_apply, quat_inv,
-        )
         from gear_sonic.isaac_utils.rotations import (
-            remove_smpl_base_rot, smpl_root_ytoz_up,
+            remove_smpl_base_rot,
+            smpl_root_ytoz_up,
         )
+        from gear_sonic.trl.utils.torch_transform import (
+            angle_axis_to_quaternion,
+            quat_apply,
+            quat_inv,
+        )
+
         self._aa2quat = angle_axis_to_quaternion
         self._quat_apply = quat_apply
         self._quat_inv = quat_inv
@@ -141,6 +161,7 @@ class SomaToSmpl:
     def _resolve_joint_names(soma_layer):
         inner = getattr(soma_layer, "soma", soma_layer)
         rig = getattr(inner, "rig_data", None)
+        # rig_data is an NpzFile: .files lists key names, arrays come off the object.
         if rig is not None and hasattr(rig, "files") and "joint_names" in rig.files:
             return [str(x) for x in rig["joint_names"]]
         if isinstance(rig, dict) and "joint_names" in rig:
@@ -148,14 +169,23 @@ class SomaToSmpl:
         names = getattr(inner, "joint_names", None) or getattr(soma_layer, "joint_names", None)
         if names is not None:
             return [str(x) for x in names]
-        raise AttributeError(
-            "Could not find SOMA joint_names (checked .soma.rig_data['joint_names'])."
-        )
+        raise AttributeError("Could not find SOMA joint_names (checked .soma.rig_data['joint_names']).")
 
     @torch.no_grad()
     def convert(self, soma_params: dict) -> dict:
         """soma_params: per-frame tensors (body_pose, global_orient,
         identity_coeffs, scale_params[, transl]). Returns v3 stream fields."""
+        missing = [
+            k for k in ("body_pose", "global_orient", "identity_coeffs", "scale_params") if k not in soma_params
+        ]
+        if missing:
+            raise KeyError(
+                f"SomaToSmpl.convert() requires {missing}; these come from GEM-X's "
+                "EnDecoder.decode() (soma_v2). There is no safe zero default here: "
+                "scale_params[0] is a global scale factor, so zeros would collapse the "
+                "rest shape and stream an all-zeros skeleton to the controller."
+            )
+
         def _t(x):
             x = torch.as_tensor(x, dtype=torch.float32, device=self.device)
             return x.unsqueeze(0) if x.dim() == 1 else x
@@ -167,21 +197,24 @@ class SomaToSmpl:
         transl = _t(soma_params.get("transl", torch.zeros(3, device=self.device)))
 
         out = self.soma(
-            body_pose=body_pose, global_orient=global_orient, transl=transl,
-            identity_coeffs=identity, scale_params=scale,
+            body_pose=body_pose,
+            global_orient=global_orient,
+            transl=transl,
+            identity_coeffs=identity,
+            scale_params=scale,
         )
-        joints77 = out["joints"][0]                       # (77,3) GEM y-up, global applied
-        joints24 = joints77[self.smpl_idx]                # (24,3)
+        joints77 = out["joints"][0]  # (77,3) GEM y-up, global applied
+        joints24 = joints77[self.smpl_idx]  # (24,3)
 
         # Mirror SONIC's process_smpl_joints convention exactly.
-        g_quat = self._aa2quat(global_orient)             # (1,4) wxyz, y-up
-        g_quat_z = self._ytoz(g_quat)                     # (1,4) z-up
+        g_quat = self._aa2quat(global_orient)  # (1,4) wxyz, y-up
+        g_quat_z = self._ytoz(g_quat)  # (1,4) z-up
         g_quat_nobase = self._remove_base_rot(g_quat_z, w_last=False)  # (1,4)
 
-        joints0 = joints24 - joints24[0:1]                # root at origin (y-up)
-        joints_z = joints0 @ self._R_up.T                 # (24,3) z-up
+        joints0 = joints24 - joints24[0:1]  # root at origin (y-up)
+        joints_z = joints0 @ self._R_up.T  # (24,3) z-up
         inv = self._quat_inv(g_quat_nobase).repeat(joints_z.shape[0], 1)  # (24,4)
-        smpl_joints_local = self._quat_apply(inv, joints_z)               # (24,3)
+        smpl_joints_local = self._quat_apply(inv, joints_z)  # (24,3)
 
         smpl_joints = smpl_joints_local.unsqueeze(0).cpu().numpy().astype(np.float32)
         body_quat = g_quat_nobase.reshape(1, 4).cpu().numpy().astype(np.float32)
@@ -195,7 +228,7 @@ class SomaToSmpl:
             else:
                 self._ema_joints = w * self._ema_joints + (1.0 - w) * smpl_joints
                 q_prev, q_new = self._ema_quat, body_quat.copy()
-                if float((q_prev * q_new).sum()) < 0.0:   # sign-align before lerp
+                if float((q_prev * q_new).sum()) < 0.0:  # sign-align before lerp
                     q_new = -q_new
                 q = w * q_prev + (1.0 - w) * q_new
                 self._ema_quat = q / (np.linalg.norm(q) + 1e-8)
@@ -221,8 +254,11 @@ def _fallback_pack_pose_message(pose_data: dict, topic: str = "pose", version: i
     Layout: [topic_bytes][1280-byte JSON header][concatenated little-endian binary fields].
     """
     dtype_map = {
-        np.dtype(np.float32): "f32", np.dtype(np.float64): "f64",
-        np.dtype(np.int32): "i32", np.dtype(np.int64): "i64", np.dtype(bool): "bool",
+        np.dtype(np.float32): "f32",
+        np.dtype(np.float64): "f64",
+        np.dtype(np.int32): "i32",
+        np.dtype(np.int64): "i64",
+        np.dtype(bool): "bool",
     }
     fields, binary = [], []
     for key, value in pose_data.items():
@@ -252,6 +288,7 @@ def _get_packer(sonic_root: str | None = None):
         sys.path.insert(0, sonic_root)
     try:
         from gear_sonic.utils.teleop.zmq.zmq_planner_sender import pack_pose_message
+
         print("[bridge] Using SONIC's pack_pose_message (exact wire format).")
         return pack_pose_message
     except Exception as exc:
@@ -274,7 +311,7 @@ class SonicV3Publisher:
 
     def publish(self, fields: dict):
         joint_pos = np.zeros((1, 29), dtype=np.float32)
-        joint_pos[:, 23:29] = fields["wrists"]            # only wrists meaningful in v3
+        joint_pos[:, 23:29] = fields["wrists"]  # only wrists meaningful in v3
         pose_data = {
             "smpl_joints": fields["smpl_joints"].reshape(1, 24, 3),
             "smpl_pose": fields["smpl_pose"].reshape(1, 21, 3),
