@@ -182,6 +182,12 @@ See [Downloading Model Checkpoints](docs/source/getting_started/download_models.
 SONIC supports real-time whole-body teleoperation via PICO VR headset, enabling natural human-to-robot motion transfer for data collection and interactive control.
 
 <div align="center">
+  <img src="docs/source/_static/sonic_v1_1_demo.gif" width="800" alt="SONIC v1.1 whole-body teleoperation demo">
+</div>
+
+<p align="center"><em><strong>SONIC v1.1:</strong> 3-point teleoperation with wrist-pose tracking, kneeling, ground pickup, and dynamic whole-body control.</em></p>
+
+<div align="center">
   <img src="docs/source/_static/sonic_low_latency_demo.gif" width="640" alt="SONIC Low Latency whole-body teleoperation and ground pickup">
 </div>
 
