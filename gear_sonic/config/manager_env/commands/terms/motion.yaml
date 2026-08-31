@@ -23,6 +23,9 @@ motion:
       use_failure_rate_decay: false
       decay_gamma: 0.8
       adp_samp_failure_rate_max_over_mean: 50.0
+      # Attribute failures to the cursor captured immediately before physics.
+      # Legacy behavior used the newly resampled cursor after termination.
+      attribute_pre_reset_cursor: false
 
   resampling_time_range: [1000000000.0, 1000000000.0]  # [1.0e9, 1.0e9]
   debug_vis: true
