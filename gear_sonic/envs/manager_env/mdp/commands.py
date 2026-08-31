@@ -243,9 +243,6 @@ class TrackingCommand(CommandTerm):
         # Isaac Lab resamples terminated environments before _update_command
         # reads the cursor. Keep the pre-physics cursor so failures are charged
         # to the motion/bin that was actually being tracked.
-        self._adp_attribute_pre_reset_cursor = self.use_adaptive_sampling and getattr(
-            self.motion_lib, "adp_samp_attribute_pre_reset_cursor", False
-        )
         self._adp_prev_motion_ids = None
         self._adp_prev_cursor = None
         self._adp_snapshot_valid = False
@@ -749,7 +746,7 @@ class TrackingCommand(CommandTerm):
 
     def capture_adaptive_cursor_snapshot(self):
         """Capture the cursor tracked by the next physics step."""
-        if not (self.use_adaptive_sampling and self._adp_attribute_pre_reset_cursor):
+        if not self.use_adaptive_sampling:
             return
         self._adp_prev_motion_ids = self.motion_ids.clone()
         self._adp_prev_cursor = self.motion_start_time_steps + self.time_steps
@@ -3228,7 +3225,7 @@ class TrackingCommand(CommandTerm):
         """
         if self.use_adaptive_sampling:
             with common.Timer("update_adaptive_sampling"):
-                if self._adp_attribute_pre_reset_cursor and self._adp_snapshot_valid:
+                if self._adp_snapshot_valid:
                     self.motion_lib.update_adaptive_sampling(
                         self._env.reset_terminated,
                         self._adp_prev_motion_ids,
@@ -3236,11 +3233,6 @@ class TrackingCommand(CommandTerm):
                     )
                     # A snapshot is valid for exactly one physics step.
                     self._adp_snapshot_valid = False
-                else:
-                    cur_time_steps = self.motion_start_time_steps + self.time_steps
-                    self.motion_lib.update_adaptive_sampling(
-                        self._env.reset_terminated, self.motion_ids, cur_time_steps
-                    )
         self.time_steps += 1
         env_ids = torch.where(
             self.time_steps + self.motion_start_time_steps

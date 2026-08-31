@@ -235,22 +235,9 @@ class MotionLibBase:
         logger.info(f"Loaded skeleton from {skeleton_file}")
         logger.info(f"Loading motion data from {self.m_cfg.motion_file}...")
         self.load_data(self.m_cfg.motion_file)
-        self.use_adaptive_sampling = self.adaptive_sampling_cfg.get("enable", False)
-        self.adp_samp_attribute_pre_reset_cursor = self.adaptive_sampling_cfg.get(
-            "attribute_pre_reset_cursor", False
-        )
-        # v1 counters are attributed to the cursor tracked during physics. v0
-        # counters use the post-reset cursor and cannot be mixed safely.
-        self._adp_samp_attribution_version = (
-            1 if self.adp_samp_attribute_pre_reset_cursor else 0
-        )
+        self.use_adaptive_sampling = self.adaptive_sampling_cfg.get("enable", True)
         if self.use_adaptive_sampling:
             self.init_adaptive_sampling()
-            if self.adp_samp_attribute_pre_reset_cursor:
-                logger.info(
-                    "Adaptive sampling: attributing failures to the pre-reset "
-                    "cursor (attribution schema v1)."
-                )
         self.setup_constants(
             fix_height=motion_lib_cfg.get("fix_height", FixHeightMode.no_fix),
             multi_thread=self.m_cfg.get("multi_thread", True),
@@ -2451,7 +2438,6 @@ class MotionLibBase:
                 {
                     "adp_samp_num_episodes": self.adp_samp_num_episodes,
                     "adp_samp_num_failures": self.adp_samp_num_failures,
-                    "adp_samp_attribution_version": self._adp_samp_attribution_version,
                 }
             )
         return state_dict
@@ -2466,17 +2452,6 @@ class MotionLibBase:
             state_dict: Dict previously returned by ``get_state_dict()``.
         """
         if self.use_adaptive_sampling and "adp_samp_num_episodes" in state_dict:
-            checkpoint_version = state_dict.get("adp_samp_attribution_version", 0)
-            if (
-                self.adp_samp_attribute_pre_reset_cursor
-                and checkpoint_version != self._adp_samp_attribution_version
-            ):
-                logger.warning(
-                    "Discarding checkpointed adaptive sampling counters: "
-                    f"attribution schema v{checkpoint_version} != "
-                    f"v{self._adp_samp_attribution_version}; starting fresh."
-                )
-                return
             if len(self.adp_samp_num_failures) != len(state_dict["adp_samp_num_failures"]):
                 print("Adaptive sampling state dict does not match. Skipping load.")  # noqa: T201
                 return

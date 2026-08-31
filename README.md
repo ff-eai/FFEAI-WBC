@@ -332,10 +332,8 @@ accelerate launch --num_processes=8 gear_sonic/train_agent_trl.py \
     ++manager_env.commands.motion.motion_lib_cfg.smpl_motion_file=data/smpl_filtered
 ```
 
-The released training recipes use corrected adaptive sampling: failures are
-attributed to the motion cursor tracked before environment reset. When
-finetuning from a legacy checkpoint, incompatible sampling counters are reset
-once while the policy and remaining checkpoint state continue to load.
+Adaptive sampling is enabled by default and attributes failures to the motion
+cursor tracked before environment reset.
 
 For the full guide including multi-node training, evaluation, ONNX export, and SOMA encoder setup:
 📖 [Installation (Training)](https://nvlabs.github.io/GR00T-WholeBodyControl/getting_started/installation_training.html) |

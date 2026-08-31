@@ -117,17 +117,10 @@ python gear_sonic/train_agent_trl.py \
 
 ### Adaptive sampling attribution
 
-The supported SONIC recipes enable corrected adaptive sampling with
-`attribute_pre_reset_cursor: true`. A terminated environment is charged to the
-motion ID and frame bin it tracked during physics, before Isaac Lab resamples
-the environment. This prevents failures from being assigned to the newly drawn
-motion.
-
-Adaptive-sampling checkpoints now record attribution schema `v1`. When a
-legacy checkpoint without that schema is used for finetuning, the policy,
-optimizer, and other training state load normally, but the old adaptive
-sampling counters are discarded because their attribution is incompatible.
-Subsequent checkpoints restore the corrected counters normally.
+Adaptive sampling is enabled by default. A terminated environment is charged
+to the motion ID and frame bin it tracked during physics, before Isaac Lab
+resamples the environment. This prevents failures from being assigned to the
+newly drawn motion.
 
 After a few hundred iterations, `adp_samp/failure_rate_max` should separate
 from `adp_samp/failure_rate_mean`; values that remain nearly identical are a
