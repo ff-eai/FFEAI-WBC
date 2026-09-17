@@ -36,6 +36,7 @@
 #include <map>
 #include <sstream>
 #include <iomanip>
+#include <algorithm>
 #include <filesystem>
 #include <regex>
 
@@ -693,6 +694,11 @@ class MotionDataReader {
         std::cerr << "Error reading directory: " << e.what() << std::endl;
         return false;
       }
+
+      // Deterministic motion indexing: directory_iterator order is
+      // filesystem-dependent, but session lists rely on stable N/P cycle
+      // order (set7+ folders carry a numeric index prefix).
+      std::sort(motion_names.begin(), motion_names.end());
 
       std::cout << "Found " << motion_names.size() << " motion folders" << std::endl;
 

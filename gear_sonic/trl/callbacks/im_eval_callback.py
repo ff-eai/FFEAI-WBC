@@ -555,10 +555,15 @@ class ImEvalCallback(TrainerCallback):
                     "right_ankle_roll_link",
                 ]
                 # NOTE use torso_link instead of head for vr_3points_subset_names
+                # Hand link differs per robot: G1 hand = *_wrist_yaw_link,
+                # FF Master hand = *_wrist_roll_link. Resolve against tracked bodies.
+                _hand = (
+                    "wrist_yaw" if "left_wrist_yaw_link" in body_names else "wrist_roll"
+                )
                 vr_3points_subset_names = [
                     "torso_link",
-                    "left_wrist_yaw_link",
-                    "right_wrist_yaw_link",
+                    f"left_{_hand}_link",
+                    f"right_{_hand}_link",
                 ]
                 other_upper_bodies_subset_names = [
                     "pelvis",

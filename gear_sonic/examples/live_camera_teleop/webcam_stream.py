@@ -14,6 +14,11 @@ Examples:
     # camera-only sanity check (no robot): live overlay window
     python webcam_stream.py --gemx-root /path/to/GEM-X --source 0 --kp-only --show
 
+    # Stream to SONIC and watch the streamed body as an in-camera mesh overlay
+    # (rendered in a separate process; add --mesh-scale 0.5 if the window lags)
+    python webcam_stream.py --gemx-root /path/to/GEM-X --source 0 \
+        --stream-sonic --show-mesh
+
     # same, headless: write an overlay clip instead
     python webcam_stream.py --gemx-root /path/to/GEM-X --source 0 \
         --kp-only --save webcam_test.mp4 --max-frames 60
@@ -56,9 +61,10 @@ import cv2
 import torch
 
 try:
-    from gem.utils.cam_utils import estimate_K
+    from gem.utils.cam_utils import compute_transl_full_cam, estimate_K
     from gem.utils.geo_transform import compute_cam_angvel, get_bbx_xys_from_xyxy
     from gem.utils.pylogger import Log
+    from gem.utils.rotation_conversions import axis_angle_to_matrix
     from scripts.demo.demo_soma_onnx import (
         load_denoiser,
         load_vitpose,
@@ -168,8 +174,15 @@ class GemWebcamStreamer:
         return get_bbx_xys_from_xyxy(bbx_xyxy, base_enlarge=1.2).float()[0]
 
     @torch.no_grad()
-    def process_frame(self, frame_rgb, W, H, decode=True):
-        """Ingest one frame; return (kp2d [77,3], soma_params or None)."""
+    def process_frame(self, frame_rgb, W, H, decode=True, return_incam=False):
+        """Ingest one frame; return (kp2d [77,3], soma_params or None).
+
+        With ``return_incam=True`` a third item is returned: the same SOMA decode
+        posed in the *camera* frame (camera-frame global_orient plus the full-
+        perspective translation recovered from the denoiser's weak-perspective
+        camera), which is what an in-camera mesh overlay needs. The streamed
+        ``soma_params`` are untouched.
+        """
         if self.K is None:
             self.K = estimate_K(W, H)
 
@@ -181,7 +194,7 @@ class GemWebcamStreamer:
         self.buf_kp2d.append(kp2d)
         self.buf_bbx.append(bbx_xys)
         if not decode or len(self.buf_kp2d) < 2:
-            return kp2d, None
+            return (kp2d, None, None) if return_incam else (kp2d, None)
 
         L = len(self.buf_kp2d)
         obs = torch.stack(list(self.buf_kp2d)).unsqueeze(0)
@@ -191,7 +204,7 @@ class GemWebcamStreamer:
         cam_angvel = compute_cam_angvel(torch.eye(3).repeat(L, 1, 1)).unsqueeze(0)  # static cam
 
         batch = {"obs": obs, "bbx_xys": bbx, "K_fullimg": K, "f_imgseq": f_imgseq, "f_cam_angvel": cam_angvel}
-        pred_x, _pred_cam = run_denoiser_onnx(self.denoiser_runner, self.denoiser_backend, batch)
+        pred_x, pred_cam = run_denoiser_onnx(self.denoiser_runner, self.denoiser_backend, batch)
 
         self._ensure_decoder()
         decode_dict = self._endecoder.decode(pred_x)
@@ -214,7 +227,59 @@ class GemWebcamStreamer:
             "identity_coeffs": decode_dict["identity_coeffs"][0, -1].cpu(),
             "scale_params": decode_dict["scale_params"][0, -1].cpu(),
         }
-        return kp2d, soma
+        if not return_incam:
+            return kp2d, soma
+
+        # Same construction as demo_soma_onnx.py's body_params_incam, last frame only.
+        incam = {
+            "body_pose": soma["body_pose"],
+            "global_orient": decode_dict["global_orient"][0, -1].cpu(),
+            "transl": compute_transl_full_cam(pred_cam[0, -1].cpu(), bbx[0, -1], K[0, -1]),
+            "identity_coeffs": soma["identity_coeffs"],
+            "scale_params": soma["scale_params"],
+        }
+        return kp2d, soma, incam
+
+
+@torch.no_grad()
+def _soma_vertices(soma_layer, params, device="cuda"):
+    """Pose the SOMA mesh with per-frame params -> (V, 3) float32 numpy."""
+
+    def _t(x):
+        x = torch.as_tensor(x, dtype=torch.float32, device=device)
+        return x.unsqueeze(0) if x.dim() == 1 else x
+
+    out = soma_layer(
+        body_pose=_t(params["body_pose"]),
+        global_orient=_t(params["global_orient"]),
+        transl=_t(params["transl"]),
+        identity_coeffs=_t(params["identity_coeffs"]),
+        scale_params=_t(params["scale_params"]),
+    )
+    return out["vertices"][0].float().cpu().numpy()
+
+
+@torch.no_grad()
+def _incam_vertices(soma_layer, incam, converter=None):
+    """Camera-frame SOMA vertices (V, 3) float32 numpy for the mesh overlay.
+
+    When streaming, ``SomaToSmpl.convert()`` has just posed this exact body
+    (world orientation, zero translation). SOMA's global rotation pivots on the
+    root joint, so the camera-frame mesh is a rigid re-orientation of those
+    vertices plus the camera translation (matches a second forward pass to
+    ~1e-6 m) and costs one small matmul instead of another body-model pass.
+    Without a converter (no --stream-sonic) the layer is run once more.
+    """
+    fw = getattr(converter, "last_forward", None) if converter is not None else None
+    if fw is None:
+        return _soma_vertices(soma_layer, incam)
+    dev = fw["vertices"].device
+    R_w = axis_angle_to_matrix(fw["global_orient"].reshape(1, 3).float())[0]
+    R_c = axis_angle_to_matrix(torch.as_tensor(incam["global_orient"], dtype=torch.float32, device=dev).reshape(1, 3))[0]
+    t_c = torch.as_tensor(incam["transl"], dtype=torch.float32, device=dev).reshape(1, 3)
+    root = fw["joints"][0, 0:1]  # pivot of the global rotation
+    verts = (fw["vertices"][0] - root) @ (R_c @ R_w.T).T + root + t_c
+    return verts.float().cpu().numpy()
 
 
 def _draw_overlay(frame_bgr, kp2d, conf_thr=0.4):
@@ -241,6 +306,18 @@ def main():
     ap.add_argument("--max-frames", type=int, default=0, help="Stop after N frames (0 = run forever)")
     ap.add_argument("--show", action="store_true", help="Show cv2 preview window (needs a display)")
     ap.add_argument("--save", default=None, help="Optional path to save 2D-overlay preview mp4")
+    ap.add_argument(
+        "--show-mesh",
+        action="store_true",
+        help="Show the streamed SOMA body as an in-camera mesh overlay window (separate render process)",
+    )
+    ap.add_argument("--save-mesh", default=None, help="Optional path to save the mesh-overlay video (mp4)")
+    ap.add_argument(
+        "--mesh-scale",
+        type=float,
+        default=1.0,
+        help="Render scale for the mesh overlay (0.5 = half resolution, ~4x cheaper)",
+    )
     ap.add_argument("--stream-sonic", action="store_true", help="Publish SMPL v3 stream to SONIC")
     ap.add_argument("--port", type=int, default=5556, help="ZMQ PUB port for SONIC stream")
     ap.add_argument(
@@ -266,10 +343,13 @@ def main():
 
     streamer = GemWebcamStreamer(args.gemx_root, window=args.window, no_imgfeat=args.no_imgfeat or True)
 
-    converter, publisher = None, None
-    if args.stream_sonic:
+    want_mesh = args.show_mesh or bool(args.save_mesh)
+    if want_mesh and args.kp_only:
+        raise SystemExit("--show-mesh/--save-mesh need the 3D decode; drop --kp-only.")
+
+    soma_layer = None
+    if args.stream_sonic or want_mesh:
         from gem.utils.soma_utils.soma_layer import SomaLayer
-        from soma_to_smpl import SomaToSmpl, SonicV3Publisher
 
         soma_layer = SomaLayer(
             data_root=str(Path(args.gemx_root) / "inputs" / "soma_assets"),
@@ -278,6 +358,11 @@ def main():
             identity_model_type="mhr",
             mode="warp",
         )
+
+    converter, publisher = None, None
+    if args.stream_sonic:
+        from soma_to_smpl import SomaToSmpl, SonicV3Publisher
+
         converter = SomaToSmpl(soma_layer, device="cuda", smooth=args.smooth, sonic_root=args.sonic_root)
         publisher = SonicV3Publisher(port=args.port, sonic_root=args.sonic_root)
         Log.info(f"[webcam] streaming SMPL v3 to SONIC on tcp://*:{args.port}")
@@ -287,6 +372,27 @@ def main():
         Path(args.save).parent.mkdir(parents=True, exist_ok=True)
         writer = cv2.VideoWriter(args.save, cv2.VideoWriter_fourcc(*"mp4v"), src_fps, (W, H))
 
+    overlay = None
+    if want_mesh:
+        from mesh_overlay import MeshOverlay
+
+        if args.save_mesh:
+            Path(args.save_mesh).parent.mkdir(parents=True, exist_ok=True)
+        overlay = MeshOverlay(
+            W,
+            H,
+            estimate_K(W, H).numpy(),  # same intrinsics the streamer uses
+            soma_layer.faces.cpu().numpy(),
+            scale=args.mesh_scale,
+            show=args.show_mesh,
+            save_path=args.save_mesh,
+            fps=src_fps,
+        )
+        Log.info(
+            f"[webcam] mesh overlay: {'window' if args.show_mesh else 'no window'}"
+            f"{', saving to ' + args.save_mesh if args.save_mesh else ''} (scale {args.mesh_scale:g})"
+        )
+
     n, t_start, t_last = 0, time.time(), time.time()
     try:
         while True:
@@ -294,7 +400,7 @@ def main():
             if not ok:
                 break
             frame_rgb = frame_bgr[..., ::-1].copy()
-            kp2d, soma = streamer.process_frame(frame_rgb, W, H, decode=not args.kp_only)
+            kp2d, soma, incam = streamer.process_frame(frame_rgb, W, H, decode=not args.kp_only, return_incam=True)
 
             if publisher is not None and soma is not None:
                 publisher.publish(converter.convert(soma))
@@ -303,6 +409,14 @@ def main():
             now = time.time()
             inst_fps = 1.0 / max(1e-6, now - t_last)
             t_last = now
+
+            if overlay is not None and incam is not None:
+                # Camera-frame mesh of the decode that was just streamed; the render
+                # itself happens in the overlay process and never blocks this loop.
+                verts = _incam_vertices(soma_layer, incam, converter if soma is not None else None)
+                overlay.submit(frame_bgr, verts, frame_idx=n, stream_fps=inst_fps)
+                if overlay.stop_requested():
+                    break
             print(
                 f"\r[webcam] frame {n} | {inst_fps:5.1f} fps | " f"soma={'yes' if soma else 'warmup/kp-only'}",
                 end="",
@@ -329,8 +443,15 @@ def main():
             writer.release()
         if args.show:
             cv2.destroyAllWindows()
+        if overlay is not None:
+            overlay.close()
         dur = time.time() - t_start
         print(f"\n[webcam] processed {n} frames in {dur:.1f}s ({n / max(1e-6, dur):.1f} fps avg)")
+        if overlay is not None:
+            print(
+                f"[webcam] mesh overlay: {overlay.submitted - overlay.dropped}/{overlay.submitted} frames rendered "
+                f"({overlay.dropped} dropped because the renderer was busy)"
+            )
 
 
 if __name__ == "__main__":

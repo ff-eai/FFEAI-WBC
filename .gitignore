@@ -67,7 +67,7 @@ instance/
 .scrapy
 
 # Sphinx documentation
-data/
+/data/
 
 # PyBuilder
 .pybuilder/
@@ -206,8 +206,7 @@ xrobotoolkit_sdk.cpython-*-*-*.so
 teleop_vids/
 *.code-workspace
 # Motion/training data (large local datasets, not tracked in git)
-data/
-bones_seed_smpl/
+/data/
 sonic_release/
 # Training output logs
 logs_rl/
@@ -219,3 +218,27 @@ models/
 # Downloaded from HuggingFace (hf download)
 sample_data/
 sonic_release/
+
+# Large local-only assets (kept on disk, not in git)
+gear_sonic_deploy/sim2sim_verify/recordings/
+
+
+# FFEAI-WBC: downloaded assets and local outputs (see download_ffmaster_assets.sh)
+gear_sonic_deploy/policy/ffmaster/*.onnx
+gear_sonic_deploy/policy/**/*.trt
+gear_sonic_deploy/reference/*/
+sonic_ffmaster/
+/data/
+results/
+logs_rl/
+logs_eval/
+wandb/
+gear_sonic_deploy/build/
+gear_sonic_deploy/target/
+.venv*/
+gear_sonic_deploy/sim2sim_verify/last_*
+# Robot meshes are not tracked: FF Master meshes come from the release bundle
+# (download_ffmaster_assets.sh --meshes); NVIDIA G1/H2 meshes from the upstream repo.
+gear_sonic/data/**/meshes/
+# make_robot_bundle.sh output
+robot_bundle/

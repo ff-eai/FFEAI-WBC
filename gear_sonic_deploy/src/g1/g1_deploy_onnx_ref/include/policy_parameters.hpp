@@ -32,6 +32,12 @@
 #ifndef POLICY_PARAMETERS_HPP
 #define POLICY_PARAMETERS_HPP
 
+#ifdef ROBOT_FFMASTER
+// FF Master build (ffmaster_deploy_onnx_ref target): same symbol names,
+// FF Master-specific values. See policy_parameters_ffmaster.hpp.
+#include "policy_parameters_ffmaster.hpp"
+#else
+
 #include <array>
 
 const double ONE_DEGREE = 0.0174533;  ///< One degree in radians.
@@ -238,5 +244,7 @@ const std::array<double, 29> default_angles = {
     0.0, // right_wrist_pitch_joint
     0.0 // right_wrist_yaw_joint
 };
+
+#endif // ROBOT_FFMASTER
 
 #endif // POLICY_PARAMETERS_HPP

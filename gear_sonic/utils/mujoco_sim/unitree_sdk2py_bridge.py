@@ -33,7 +33,9 @@ class UnitreeSdk2Bridge:
         # It is unsafe and would be unflexible if we use a hand-plugged robot model
 
         robot_type = config["ROBOT_TYPE"]
-        if "g1" in robot_type or "h1-2" in robot_type:
+        # ffmaster reuses the unitree_hg message family for sim2sim: 35 motor slots
+        # cover FF Master's 29 DOF, and the deploy client speaks the same structs.
+        if "g1" in robot_type or "h1-2" in robot_type or "ffmaster" in robot_type:
             from unitree_sdk2py.idl.default import (
                 unitree_hg_msg_dds__IMUState_ as IMUState_default,
                 unitree_hg_msg_dds__LowCmd_,
@@ -53,7 +55,9 @@ class UnitreeSdk2Bridge:
 
             self.low_cmd = unitree_go_msg_dds__LowCmd_()
         else:
-            raise ValueError(f"Invalid robot type '{robot_type}'. Expected 'g1', 'h1', or 'go2'.")
+            raise ValueError(
+                f"Invalid robot type '{robot_type}'. Expected 'g1', 'h1', 'go2', or 'ffmaster'."
+            )
 
         self.num_body_motor = config["NUM_MOTORS"]
         self.num_hand_motor = config.get("NUM_HAND_MOTORS", 0)
@@ -68,7 +72,7 @@ class UnitreeSdk2Bridge:
         self.low_state_puber.Init()
 
         # Only create odo_state for supported robot types
-        if "g1" in robot_type or "h1-2" in robot_type:
+        if "g1" in robot_type or "h1-2" in robot_type or "ffmaster" in robot_type:
             self.odo_state = OdoState_default()
             self.odo_state_puber = ChannelPublisher("rt/odostate", OdoState_)
             self.odo_state_puber.Init()
@@ -86,6 +90,11 @@ class UnitreeSdk2Bridge:
         self.right_hand_state_puber = ChannelPublisher("rt/dex3/right/state", HandState_)
         self.right_hand_state_puber.Init()
 
+        # Locks must exist before subscribers Init(): reader threads can fire
+        # handlers immediately if a publisher (e.g. a stale deploy binary) is live.
+        self.low_cmd_lock = threading.Lock()
+        self.left_hand_cmd_lock = threading.Lock()
+        self.right_hand_cmd_lock = threading.Lock()
         self.low_cmd_suber = ChannelSubscriber("rt/lowcmd", LowCmd_)
         self.low_cmd_suber.Init(self.LowCmdHandler, 1)
 
@@ -96,9 +105,6 @@ class UnitreeSdk2Bridge:
         self.right_hand_cmd_suber = ChannelSubscriber("rt/dex3/right/cmd", HandCmd_)
         self.right_hand_cmd_suber.Init(self.RightHandCmdHandler, 1)
 
-        self.low_cmd_lock = threading.Lock()
-        self.left_hand_cmd_lock = threading.Lock()
-        self.right_hand_cmd_lock = threading.Lock()
 
         self.wireless_controller = unitree_go_msg_dds__WirelessController_()
         self.wireless_controller_puber = ChannelPublisher(

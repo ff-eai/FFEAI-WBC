@@ -16,7 +16,7 @@ import joblib
 import pxr
 
 from gear_sonic.envs.manager_env.mdp import terrain
-from gear_sonic.envs.manager_env.robots import g1, h2
+from gear_sonic.envs.manager_env.robots import g1, h2, ffmaster
 from gear_sonic.trl.utils import common
 
 
@@ -969,7 +969,11 @@ class ModularTrackingEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.dt = config.get("sim_dt", 0.005)
         self.sim.render_interval = self.decimation
         self.sim.physics_material = self.scene.terrain.physics_material
-        self.sim.physx.gpu_max_rigid_patch_count = 10 * 2**15
+        # Contact-patch buffer; overflows drop contacts silently. Needs headroom for
+        # many-env runs with multi-primitive feet (e.g. FF Master sphere soles at 16k envs).
+        self.sim.physx.gpu_max_rigid_patch_count = config.get(
+            "gpu_max_rigid_patch_count", 10 * 2**15
+        )
 
         # Increase collision stack size for scenes with complex collision meshes (e.g. staircases)
         gpu_collision_stack_size_exp = config.get("gpu_collision_stack_size_exp", 26)
@@ -1005,6 +1009,11 @@ class ModularTrackingEnvCfg(ManagerBasedRLEnvCfg):
                 "robot_cfg": h2.H2_CFG,
                 "action_scale": h2.H2_ACTION_SCALE,
                 "isaaclab_to_mujoco_mapping": h2.H2_ISAACLAB_TO_MUJOCO_MAPPING,
+            },
+            "ffmaster": {
+                "robot_cfg": ffmaster.FFMASTER_CFG,
+                "action_scale": ffmaster.FFMASTER_ACTION_SCALE,
+                "isaaclab_to_mujoco_mapping": ffmaster.FFMASTER_ISAACLAB_TO_MUJOCO_MAPPING,
             },
         }
 

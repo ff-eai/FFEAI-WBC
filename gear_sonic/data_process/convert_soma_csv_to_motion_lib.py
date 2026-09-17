@@ -162,7 +162,105 @@ BONES_CSV_JOINT_NAMES = [
 ]
 
 
-def load_bones_csv(csv_path: str) -> dict:
+# ---------------------------------------------------------------------------
+# FF Master (29 DOF training model: head_yaw/head_pitch locked).
+# Axes from ffmaster_sonic_29dof.xml, in its MJCF joint order. Note the order
+# differences vs G1: waist is yaw→pitch→roll and wrists are yaw→pitch→roll.
+# The MJCF has 32 bodies: pelvis + 29 actuated links + 2 welded head links at
+# the END of the body order, so pose_aa rows 30-31 stay zero.
+# ---------------------------------------------------------------------------
+FFMASTER_DOF_AXIS = np.array(
+    [
+        [0, 1, 0],
+        [1, 0, 0],
+        [0, 0, 1],
+        [0, 1, 0],
+        [0, 1, 0],
+        [1, 0, 0],  # left leg
+        [0, 1, 0],
+        [1, 0, 0],
+        [0, 0, 1],
+        [0, 1, 0],
+        [0, 1, 0],
+        [1, 0, 0],  # right leg
+        [0, 0, 1],
+        [0, 1, 0],
+        [1, 0, 0],  # waist (yaw, pitch, roll)
+        [0, 1, 0],
+        [1, 0, 0],
+        [0, 0, 1],
+        [0, 1, 0],
+        [0, 0, 1],
+        [0, 1, 0],
+        [1, 0, 0],  # left arm (wrist: yaw, pitch, roll)
+        [0, 1, 0],
+        [1, 0, 0],
+        [0, 0, 1],
+        [0, 1, 0],
+        [0, 0, 1],
+        [0, 1, 0],
+        [1, 0, 0],  # right arm
+    ],
+    dtype=np.float32,
+)
+
+# Expected CSV joint columns for FF Master, in ffmaster_sonic_29dof.xml MJCF order.
+# The SOMA FF Master CSVs additionally contain head_yaw/head_pitch columns (zeroed);
+# selecting by this explicit list drops them.
+FFMASTER_CSV_JOINT_NAMES = [
+    "left_hip_pitch_joint_dof",
+    "left_hip_roll_joint_dof",
+    "left_hip_yaw_joint_dof",
+    "left_knee_joint_dof",
+    "left_ankle_pitch_joint_dof",
+    "left_ankle_roll_joint_dof",
+    "right_hip_pitch_joint_dof",
+    "right_hip_roll_joint_dof",
+    "right_hip_yaw_joint_dof",
+    "right_knee_joint_dof",
+    "right_ankle_pitch_joint_dof",
+    "right_ankle_roll_joint_dof",
+    "waist_yaw_joint_dof",
+    "waist_pitch_joint_dof",
+    "waist_roll_joint_dof",
+    "left_shoulder_pitch_joint_dof",
+    "left_shoulder_roll_joint_dof",
+    "left_shoulder_yaw_joint_dof",
+    "left_elbow_joint_dof",
+    "left_wrist_yaw_joint_dof",
+    "left_wrist_pitch_joint_dof",
+    "left_wrist_roll_joint_dof",
+    "right_shoulder_pitch_joint_dof",
+    "right_shoulder_roll_joint_dof",
+    "right_shoulder_yaw_joint_dof",
+    "right_elbow_joint_dof",
+    "right_wrist_yaw_joint_dof",
+    "right_wrist_pitch_joint_dof",
+    "right_wrist_roll_joint_dof",
+]
+
+# Per-robot conversion specs. num_bodies counts MJCF bodies including welded
+# links (pose_aa rows beyond num_dof+1 stay zero); actuated body i carries
+# dof i-1 (holds for both robots: welded bodies come last in MJCF body order).
+ROBOT_SPECS = {
+    "g1": {
+        "num_dof": NUM_DOF,
+        "num_bodies": NUM_BODIES,
+        "dof_axis": DOF_AXIS,
+        "csv_joint_names": BONES_CSV_JOINT_NAMES,
+        "asset_file": "g1_29dof_rev_1_0.xml",
+    },
+    "ffmaster": {
+        "num_dof": 29,
+        "num_bodies": 32,
+        "dof_axis": FFMASTER_DOF_AXIS,
+        "csv_joint_names": FFMASTER_CSV_JOINT_NAMES,
+        "asset_file": "ffmaster_sonic_29dof.xml",
+    },
+}
+
+
+def load_bones_csv(csv_path: str, robot: str = "g1") -> dict:
     """Load a single Bones-SEED flat CSV motion file.
 
     Bones-SEED CSV format: Frame, root_translate{X,Y,Z}, root_rotate{X,Y,Z}, 29 joint DOFs.
@@ -202,9 +300,13 @@ def load_bones_csv(csv_path: str) -> dict:
     # Convert xyzw → wxyz for body_quat_w format
     root_quat_wxyz = root_quat_xyzw[:, [3, 0, 1, 2]]
 
-    # Joint DOFs: degrees → radians, already in MuJoCo/MJCF actuator order
-    joint_cols = [c for c in data.columns if c.endswith("_dof")]
-    joint_pos_mj = np.deg2rad(data[joint_cols].values).astype(np.float32)  # (T, 29)
+    # Joint DOFs: degrees → radians, selected by the robot's expected column
+    # list (MJCF actuator order); extra columns (e.g. FF Master head) are dropped.
+    expected_cols = ROBOT_SPECS[robot]["csv_joint_names"]
+    missing = [c for c in expected_cols if c not in data.columns]
+    if missing:
+        raise ValueError(f"{csv_path}: missing joint columns {missing}")
+    joint_pos_mj = np.deg2rad(data[expected_cols].values).astype(np.float32)  # (T, num_dof)
 
     # Create dummy body_pos_w and body_quat_w (only root body populated, rest zeros)
     # The converter only uses body_pos_w[:,0] for root_trans and body_quat_w[:,0] for root_rot
@@ -247,18 +349,23 @@ def load_csv_motion(motion_dir: str) -> dict:
     }
 
 
-def convert_sequence(seq_data: dict, fps: int, humanoid_fk=None) -> dict:  # noqa: ARG001
+def convert_sequence(seq_data: dict, fps: int, humanoid_fk=None, robot: str = "g1") -> dict:  # noqa: ARG001
     """Convert a single deploy-format sequence to motion_lib format.
 
     Args:
-        seq_data: dict with joint_pos (T, 29), body_pos_w (T, 14, 3),
+        seq_data: dict with joint_pos (T, num_dof), body_pos_w (T, 14, 3),
                   body_quat_w (T, 14, 4 wxyz)
         fps: frame rate of the input data
         humanoid_fk: Optional Humanoid_Batch instance (unused, kept for compat)
+        robot: key into ROBOT_SPECS ("g1" or "ffmaster")
 
     Returns:
         motion_lib entry dict with root_trans_offset, pose_aa, dof, root_rot, fps
     """
+    spec = ROBOT_SPECS[robot]
+    num_dof = spec["num_dof"]
+    num_bodies = spec["num_bodies"]
+    dof_axis = spec["dof_axis"]
     joint_pos = seq_data["joint_pos"]  # (T, 29)
     body_pos_w = seq_data["body_pos_w"]  # (T, 14, 3)
     body_quat_w = seq_data["body_quat_w"]  # (T, 14, 4) wxyz
@@ -281,14 +388,15 @@ def convert_sequence(seq_data: dict, fps: int, humanoid_fk=None) -> dict:  # noq
         # Input is already in MuJoCo order (e.g., Bones-SEED CSVs)
         dof_mj = joint_pos  # (T, 29)
 
-    # 4. Convert DOF → pose_aa using hardcoded G1 axis definitions
-    dof = dof_mj[:, :NUM_DOF]
+    # 4. Convert DOF → pose_aa using the robot's per-DOF axis definitions
+    dof = dof_mj[:, :num_dof]
 
     # pose_aa[body_idx] = dof_axis * dof_value (axis-angle representation)
-    # Body 0 = pelvis (root), bodies 1-29 = actuated joints
-    pose_aa = np.zeros((T, NUM_BODIES, 3), dtype=np.float32)
+    # Body 0 = pelvis (root), bodies 1..num_dof = actuated joints; any welded
+    # bodies beyond that (FF Master head links) keep zero rotation.
+    pose_aa = np.zeros((T, num_bodies, 3), dtype=np.float32)
     # Actuated joints: body idx = dof idx + 1
-    pose_aa[:, 1:NUM_BODIES, :] = DOF_AXIS[None, :, :] * dof[:, :, None]
+    pose_aa[:, 1 : num_dof + 1, :] = dof_axis[None, :, :] * dof[:, :, None]
 
     # Set root rotation as axis-angle
     pose_aa[:, 0, :] = transform.Rotation.from_quat(root_quat_xyzw).as_rotvec()
@@ -351,7 +459,7 @@ def init_humanoid_fk():
 
 def process_session_csvs(args_tuple):
     """Process all CSVs in a single session directory. Used by multiprocessing."""
-    session_dir, session_name, out_dir, fps, fps_source = args_tuple
+    session_dir, session_name, out_dir, fps, fps_source, robot = args_tuple
     import warnings
 
     warnings.filterwarnings("ignore")
@@ -370,9 +478,9 @@ def process_session_csvs(args_tuple):
             converted += 1  # skip existing
             continue
         try:
-            seq = load_bones_csv(os.path.join(session_dir, csv_f))
+            seq = load_bones_csv(os.path.join(session_dir, csv_f), robot=robot)
             fps_for_convert = fps_source if fps_source else fps
-            entry = convert_sequence(seq, fps_for_convert)
+            entry = convert_sequence(seq, fps_for_convert, robot=robot)
             if fps_source and fps_source != fps:
                 entry = downsample_sequence(entry, fps_source, fps)
             joblib.dump({name: entry}, out_path, compress=True)
@@ -414,9 +522,16 @@ def main():
         default=8,
         help="Number of parallel workers for --individual mode",
     )
+    parser.add_argument(
+        "--robot",
+        choices=sorted(ROBOT_SPECS),
+        default="g1",
+        help="Target robot (selects DOF axes, body count, and CSV joint columns)",
+    )
     args = parser.parse_args()
 
-    print(f"G1 {NUM_DOF} DOFs, {NUM_BODIES} bodies (hardcoded axes)")
+    spec = ROBOT_SPECS[args.robot]
+    print(f"{args.robot} {spec['num_dof']} DOFs, {spec['num_bodies']} bodies (hardcoded axes)")
 
     # Individual PKL mode: skip scanning, go straight to parallel per-session processing
     if args.individual:
@@ -443,10 +558,14 @@ def main():
             for d in subdirs:
                 subdir = os.path.join(args.input, d)
                 if any(f.endswith(".csv") for f in os.listdir(subdir)):
-                    session_dirs.append((subdir, d, args.output, args.fps, args.fps_source))
+                    session_dirs.append(
+                        (subdir, d, args.output, args.fps, args.fps_source, args.robot)
+                    )
         elif has_csvs:
             session_name = os.path.basename(args.input.rstrip("/"))
-            session_dirs.append((args.input, session_name, args.output, args.fps, args.fps_source))
+            session_dirs.append(
+                (args.input, session_name, args.output, args.fps, args.fps_source, args.robot)
+            )
 
         print(f"\nBatch converting {len(session_dirs)} sessions with {args.num_workers} workers")
         print(f"Output: {args.output}")
@@ -513,7 +632,7 @@ def main():
                 csv_path = os.path.join(args.input, csv_f)
                 name = os.path.splitext(csv_f)[0]
                 try:
-                    seq = load_bones_csv(csv_path)
+                    seq = load_bones_csv(csv_path, robot=args.robot)
                     sequences[name] = seq
                 except Exception as e:  # noqa: BLE001
                     print(f"  WARNING: Failed to load {csv_f}: {e}")
@@ -538,7 +657,7 @@ def main():
                         csv_path = os.path.join(subdir, csv_f)
                         name = os.path.splitext(csv_f)[0]
                         try:
-                            seq = load_bones_csv(csv_path)
+                            seq = load_bones_csv(csv_path, robot=args.robot)
                             sequences[name] = seq
                         except Exception as e:  # noqa: BLE001
                             print(f"  WARNING: Failed to load {dname}/{csv_f}: {e}")
@@ -568,7 +687,7 @@ def main():
         T = seq_data["joint_pos"].shape[0]
         print(f"  Converting {name}: {T} frames @ {args.fps} fps")
         fps_for_convert = args.fps_source if args.fps_source else args.fps
-        entry = convert_sequence(seq_data, fps_for_convert)
+        entry = convert_sequence(seq_data, fps_for_convert, robot=args.robot)
         if args.fps_source and args.fps_source != args.fps:
             entry = downsample_sequence(entry, args.fps_source, args.fps)
         motion_lib_dict[name] = entry

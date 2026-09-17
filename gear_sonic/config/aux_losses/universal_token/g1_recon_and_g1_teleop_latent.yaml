@@ -1,0 +1,11 @@
+# @package algo.config.actor.backbone
+# Aux losses for the two-encoder (G1 + teleop) actor: kinematic reconstruction and
+# G1<->teleop latent alignment only (no SMPL terms).
+
+defaults:
+  - terms/g1_recon@aux_loss_func
+  - terms/g1_teleop_latent@aux_loss_func
+
+aux_loss_coef:
+  g1_recon: 0.01
+  g1_teleop_latent: 1.0

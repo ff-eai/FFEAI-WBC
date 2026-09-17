@@ -202,6 +202,37 @@ class H2Converter(IsaacLabMuJoCoConverter):
     FOOT_BODY_NAMES = ["left_ankle_roll_link", "right_ankle_roll_link"]
 
 
+class FFMasterConverter(IsaacLabMuJoCoConverter):
+    """FF Master joint/body order converter between IsaacLab and MuJoCo conventions.
+
+    29 DOF (head locked), 32 bodies (head links welded). The wrist chain is
+    yaw -> pitch -> roll, so the hand end-effector body is *_wrist_roll_link
+    (unlike G1, where *_wrist_yaw_link is the last wrist body).
+    """
+
+    def __init__(self):
+        from gear_sonic.envs.manager_env.robots.ffmaster import (
+            FFMASTER_ISAACLAB_JOINTS,
+            FFMASTER_ISAACLAB_TO_MUJOCO_BODY,
+            FFMASTER_ISAACLAB_TO_MUJOCO_DOF,
+            FFMASTER_MUJOCO_TO_ISAACLAB_BODY,
+            FFMASTER_MUJOCO_TO_ISAACLAB_DOF,
+        )
+
+        self.JOINT_NAMES = FFMASTER_ISAACLAB_JOINTS
+        self.DOF_MAPPINGS = {
+            ("isaaclab", "mujoco"): FFMASTER_ISAACLAB_TO_MUJOCO_DOF,
+            ("mujoco", "isaaclab"): FFMASTER_MUJOCO_TO_ISAACLAB_DOF,
+        }
+        self.BODY_MAPPINGS = {
+            ("isaaclab", "mujoco"): FFMASTER_ISAACLAB_TO_MUJOCO_BODY,
+            ("mujoco", "isaaclab"): FFMASTER_MUJOCO_TO_ISAACLAB_BODY,
+        }
+
+    VR_3POINTS_BODY_NAMES = ["torso_link", "left_wrist_roll_link", "right_wrist_roll_link"]
+    FOOT_BODY_NAMES = ["left_ankle_roll_link", "right_ankle_roll_link"]
+
+
 def load_qpos_from_csv(csv_path: str) -> torch.Tensor:
     """Load qpos [T, D] from CSV."""
     import pandas as pd

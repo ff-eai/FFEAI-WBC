@@ -130,6 +130,9 @@ class SomaToSmpl:
         self.smooth = float(smooth)
         self._ema_joints = None
         self._ema_quat = None
+        # Last body-model forward (vertices/joints on device + the orientation used),
+        # kept so a viewer can reuse the already-posed mesh instead of re-running SOMA.
+        self.last_forward = None
 
         names = self._resolve_joint_names(soma_layer)
         if len(names) == 78 and _norm(names[0]) == "root":
@@ -203,6 +206,7 @@ class SomaToSmpl:
             identity_coeffs=identity,
             scale_params=scale,
         )
+        self.last_forward = {"vertices": out["vertices"], "joints": out["joints"], "global_orient": global_orient}
         joints77 = out["joints"][0]  # (77,3) GEM y-up, global applied
         joints24 = joints77[self.smpl_idx]  # (24,3)
 

@@ -43,7 +43,11 @@ def main(config: ArgsConfig):
             config.enable_offscreen
         ), "enable_offscreen must be True when enable_image_publish is True"
 
-    robot_model = instantiate_g1_robot_model()
+    # The RobotModel is only stored on the wrapper (the simulator never uses
+    # it); the G1 factory is the only one available, so skip it for other robots.
+    robot_model = (
+        instantiate_g1_robot_model() if "g1" in wbc_config.get("ROBOT_TYPE", "g1") else None
+    )
 
     sim_wrapper = SimWrapper(
         robot_model=robot_model,

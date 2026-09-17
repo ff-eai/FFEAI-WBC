@@ -122,6 +122,12 @@ python gear_sonic/examples/live_camera_teleop/webcam_stream.py --source 0 \
     --stream-sonic --window 30 --smooth 0.8
 ```
 
+Add `--show-mesh` to also open a window with the streamed SOMA body rendered
+over the camera frames (like the `*_1_incam.mp4` GEM-X's demo writes). The
+render runs in a separate process fed by a drop-on-full queue, so it never
+blocks the stream loop; add `--mesh-scale 0.5` if the window lags, or
+`--save-mesh out.mp4` to record it.
+
 ### Offline SMPL verify (no camera)
 ```bash
 python gear_sonic/examples/live_camera_teleop/soma_pt_to_sonic_v3.py \
@@ -141,6 +147,8 @@ keep a safety operator on the E-stop.
 - `--source`: camera index (`ls /dev/video*`) or a video file (stand-in).
 - `--resolution` / `--cap-fps`: request a camera capture mode (see Camera setup).
 - `--kp-only` / `--show` / `--save`: 2D-only preview modes for camera checks.
+- `--show-mesh` / `--save-mesh` / `--mesh-scale`: live in-camera mesh overlay of
+  the streamed body (separate render process; see `mesh_overlay.py`).
 
 ## Notes / limitations
 - The live path streams root-local SMPL pose + heading; it does not command an

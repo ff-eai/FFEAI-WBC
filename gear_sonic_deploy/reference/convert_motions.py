@@ -123,6 +123,14 @@ def convert_single_motion(motion_name, motion_data, output_dir):
         body_ang_vel_headers = [f"body_{i//3}_angvel_{'xyz'[i%3]}" for i in range(body_ang_vel_reshaped.shape[1])]
         save_array_as_csv(body_ang_vel_reshaped, body_ang_vel_file, body_ang_vel_headers)
         
+        # 5b. Optional SMPL joints (already canonicalized by the exporter; the
+        # C++ gatherer copies these values raw into the smpl encoder slots)
+        if 'smpl_joint' in motion_data:
+            smpl_joint = motion_data['smpl_joint']  # (timesteps, 72)
+            smpl_joint_file = os.path.join(output_dir, "smpl_joint.csv")
+            smpl_headers = [f"smpl_joint_{i//3}_{'xyz'[i%3]}" for i in range(smpl_joint.shape[1])]
+            save_array_as_csv(smpl_joint, smpl_joint_file, smpl_headers)
+
         # 6. Save metadata
         metadata_file = os.path.join(output_dir, "metadata.txt")
         save_metadata(motion_name, motion_data, metadata_file)

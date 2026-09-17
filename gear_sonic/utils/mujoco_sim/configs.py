@@ -15,7 +15,7 @@ import yaml
 
 from gear_sonic.utils.network.network_utils import resolve_interface
 
-WBC_VERSIONS = ["sonic_model12"]
+WBC_VERSIONS = ["sonic_model12", "ffmaster_sonic_model12"]
 
 @dataclass
 class ArgsConfigTemplate:
@@ -99,9 +99,13 @@ def override_wbc_config(
         for key in key_to_value:
             wbc_config[key] = key_to_value[key]
 
+    if config.get("fall_check_height") is not None:
+        wbc_config["FALL_CHECK_HEIGHT"] = config.fall_check_height
+
     # Sim-to-real KD gap: waist pitch (index 14) is over-damped in sim;
-    # reduce KD by 10 on the real robot to avoid sluggish response
-    if config.env_type == "real":
+    # reduce KD by 10 on the real robot to avoid sluggish response.
+    # G1-only: index 14 is waist_roll on FF Master, and the offset is a G1 tuning.
+    if config.env_type == "real" and "g1" in wbc_config.get("ROBOT_TYPE", "g1"):
         wbc_config["MOTOR_KD"][14] = wbc_config["MOTOR_KD"][14] - 10
 
     return wbc_config
@@ -204,6 +208,10 @@ class BaseConfig(ArgsConfigTemplate):
 
     enable_natural_walk: bool = False
     """Enable natural walk mode."""
+
+    fall_check_height: Optional[float] = None
+    """Override the sim auto-reset pelvis height (default 0.2). Set to e.g.
+    0.05 when playing ground-level references such as crawling."""
 
     # Teleop/Device Configuration
     body_control_device: str = "dummy"
@@ -315,10 +323,12 @@ class BaseConfig(ArgsConfigTemplate):
 
         if self.wbc_version == "sonic_model12":
             config_path = str(configs_dir / "g1_29dof_sonic_model12.yaml")
+        elif self.wbc_version == "ffmaster_sonic_model12":
+            config_path = str(configs_dir / "ffmaster_29dof_sonic_model12.yaml")
         else:
             raise ValueError(
                 f"Invalid wbc_version: {self.wbc_version}, please use one of: "
-                f"sonic_model12"
+                f"{', '.join(WBC_VERSIONS)}"
             )
 
         with open(config_path) as file:

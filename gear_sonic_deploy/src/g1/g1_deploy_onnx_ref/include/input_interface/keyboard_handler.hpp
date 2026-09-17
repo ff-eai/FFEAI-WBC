@@ -70,6 +70,7 @@ class SimpleKeyboard : public InputInterface {
     bool motion_next = false;      ///< Switch to next pre-loaded motion.
     bool play_motion = false;      ///< Start / resume motion playback.
     bool motion_restart = false;   ///< Reset current motion to frame 0 (paused).
+    int select_motion = -1;        ///< Jump directly to motion #0-9 (digit keys); -1 = none.
 
     bool start_control = false;    ///< Request control-system start.
     bool stop_control = false;     ///< Request emergency stop.
@@ -157,6 +158,7 @@ class SimpleKeyboard : public InputInterface {
       motion_next = false;
       play_motion = false;
       motion_restart = false;
+      select_motion = -1;
       delta_left = false;
       delta_right = false;
       reinitialize = false;
@@ -299,6 +301,10 @@ class SimpleKeyboard : public InputInterface {
             case 'P': motion_prev = true; break; // Previous motion
             case 'n':
             case 'N': motion_next = true; break; // Next motion
+            case '0': case '1': case '2': case '3': case '4':
+            case '5': case '6': case '7': case '8': case '9':
+                select_motion = ch - '0'; break; // Jump directly to motion 0-9
+
             case 't':
             case 'T': play_motion = true; break; // Play motion to end
             case 'r':
@@ -402,6 +408,27 @@ class SimpleKeyboard : public InputInterface {
             current_frame = 0;
             motion_name = current_motion->name;
             reinitialize_heading = true;
+          }
+      }
+
+      // Direct jump via digit keys 0-9 (same effect as walking there with N/P)
+      if (this->select_motion >= 0 && !motion_reader.motions.empty()) {
+          if (static_cast<size_t>(this->select_motion) < motion_reader.motions.size()) {
+              motion_reader.current_motion_index_ = this->select_motion;
+              std::string motion_name;
+              {
+                std::lock_guard<std::mutex> lock(current_motion_mutex);
+                operator_state.play = false;
+                current_motion = motion_reader.GetMotionShared(motion_reader.current_motion_index_);  // Update current motion directly
+                current_frame = 0;
+                motion_name = current_motion->name;
+                reinitialize_heading = true;
+              }
+              std::cout << "Motion index: " << motion_reader.current_motion_index_
+                        << " : " << motion_name << " selected" << std::endl;
+          } else {
+              std::cout << "No motion #" << this->select_motion << " - only "
+                        << motion_reader.motions.size() << " motions loaded" << std::endl;
           }
       }
 

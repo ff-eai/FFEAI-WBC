@@ -204,6 +204,8 @@ show_usage() {
     echo ""
     echo "Options:"
     echo "  -h, --help              Show this help message"
+    echo "  --robot ROBOT           Robot variant: g1 (default) or ffmaster"
+    echo "  --encoder-mode N        Initial encoder mode: 0=tracking (default), 1=teleop, 2=smpl"
     echo "  --cp, --checkpoint PATH Set the checkpoint path (default: policy/checkpoints/example/model_step_000000)"
     echo "  --obs-config PATH       Set the observation config file (default: policy/configs/example.yaml)"
     echo "  --planner PATH          Set the planner model path (default: planner/example.onnx)"
@@ -236,20 +238,23 @@ show_usage() {
 # Default interface mode
 INTERFACE_MODE="real"
 
-# Default configuration values (can be overridden by command line)
-CHECKPOINT_DEFAULT="policy/release/model"
-OBS_CONFIG_DEFAULT="policy/release/observation_config.yaml"
-PLANNER_DEFAULT="planner/target_vel/V2/planner_sonic.onnx"
-MOTION_DATA_DEFAULT="reference/example/"
+# Robot variant (g1 or ffmaster); selects binary and per-robot default artifacts
+ROBOT="g1"
+
+# Initial encoder mode (empty = binary default, 0 = motion tracking).
+# The keyboard 'Z' key only toggles 0<->1, so mode 2 (smpl) needs this flag.
+ENCODER_MODE=""
+
+# Explicit overrides (empty = use per-robot default resolved after parsing)
+CHECKPOINT=""
+OBS_CONFIG=""
+PLANNER=""
+PLANNER_SET=0
+MOTION_DATA=""
 INPUT_TYPE_DEFAULT="manager"
 OUTPUT_TYPE_DEFAULT="all"
 ZMQ_HOST_DEFAULT="localhost"
 
-# Initialize with defaults (will be set after parsing)
-CHECKPOINT="$CHECKPOINT_DEFAULT"
-OBS_CONFIG="$OBS_CONFIG_DEFAULT"
-PLANNER="$PLANNER_DEFAULT"
-MOTION_DATA="$MOTION_DATA_DEFAULT"
 INPUT_TYPE="$INPUT_TYPE_DEFAULT"
 OUTPUT_TYPE="$OUTPUT_TYPE_DEFAULT"
 ZMQ_HOST="$ZMQ_HOST_DEFAULT"
@@ -262,6 +267,22 @@ while [[ $# -gt 0 ]]; do
         -h|--help)
             show_usage
             exit 0
+            ;;
+        --robot)
+            if [[ -z "$2" ]]; then
+                echo -e "${RED}Error: --robot requires g1 or ffmaster${NC}" >&2
+                exit 1
+            fi
+            ROBOT="$2"
+            shift 2
+            ;;
+        --encoder-mode)
+            if [[ -z "$2" ]]; then
+                echo -e "${RED}Error: --encoder-mode requires 0, 1 or 2${NC}" >&2
+                exit 1
+            fi
+            ENCODER_MODE="$2"
+            shift 2
             ;;
         --cp|--checkpoint)
             if [[ -z "$2" ]]; then
@@ -285,6 +306,7 @@ while [[ $# -gt 0 ]]; do
                 exit 1
             fi
             PLANNER="$2"
+            PLANNER_SET=1
             shift 2
             ;;
         --motion-data)
@@ -346,6 +368,33 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# ============================================================================
+# Resolve per-robot defaults
+# ============================================================================
+
+case "$ROBOT" in
+    g1)
+        BINARY_NAME="g1_deploy_onnx_ref"
+        [[ -z "$CHECKPOINT" ]] && CHECKPOINT="policy/release/model"
+        [[ -z "$OBS_CONFIG" ]] && OBS_CONFIG="policy/release/observation_config.yaml"
+        [[ -z "$MOTION_DATA" ]] && MOTION_DATA="reference/example/"
+        [[ "$PLANNER_SET" == "0" ]] && PLANNER="planner/target_vel/V2/planner_sonic.onnx"
+        ;;
+    ffmaster)
+        BINARY_NAME="ffmaster_deploy_onnx_ref"
+        [[ -z "$CHECKPOINT" ]] && CHECKPOINT="policy/ffmaster/model"
+        [[ -z "$OBS_CONFIG" ]] && OBS_CONFIG="policy/ffmaster/observation_config.yaml"
+        [[ -z "$MOTION_DATA" ]] && MOTION_DATA="reference/ffmaster_set8/"
+        # No FF Master-trained planner exists; the G1 planner emits G1 kinematics.
+        # Leave empty unless explicitly overridden (planner thread is skipped).
+        [[ "$PLANNER_SET" == "0" ]] && PLANNER=""
+        ;;
+    *)
+        echo -e "${RED}Error: unknown --robot '$ROBOT' (expected g1 or ffmaster)${NC}" >&2
+        exit 1
+        ;;
+esac
 
 # ============================================================================
 # Display Header
@@ -452,7 +501,11 @@ MISSING_FILES=0
 check_file "$CHECKPOINT_DECODER" || MISSING_FILES=$((MISSING_FILES + 1))
 check_file "$CHECKPOINT_ENCODER" || MISSING_FILES=$((MISSING_FILES + 1))
 check_file "$OBS_CONFIG" || MISSING_FILES=$((MISSING_FILES + 1))
-check_file "$PLANNER" || MISSING_FILES=$((MISSING_FILES + 1))
+if [[ -n "$PLANNER" ]]; then
+    check_file "$PLANNER" || MISSING_FILES=$((MISSING_FILES + 1))
+else
+    echo -e "${YELLOW}⚠️  No planner configured (planner thread disabled)${NC}"
+fi
 
 if [ -d "$MOTION_DATA" ]; then
     echo -e "${GREEN}✅ Found: $MOTION_DATA${NC}"
@@ -515,6 +568,19 @@ set +e  # Temporarily allow errors (for jetson_clocks on non-Jetson systems)
 source scripts/setup_env.sh
 set -e  # Re-enable exit on error
 
+# setup_env.sh sources any installed ROS2 (added to this machine 2026-08-04),
+# whose CycloneDDS libddsc.so.0 then shadows the vendored one via
+# LD_LIBRARY_PATH and ABI-mismatches the vendored libddscxx (heap corruption
+# at DDS init). Keep the vendored DDS pair first in the search path.
+export LD_LIBRARY_PATH="$SCRIPT_DIR/thirdparty/unitree_sdk2/thirdparty/lib/x86_64:$LD_LIBRARY_PATH"
+
+# Since ROS2 humble was installed (2026-08-04), setup_env.sh auto-detects it
+# and sets HAS_ROS2=1, flipping CMake into the ROS2-enabled build path — which
+# does not compile on this machine (glibc feature-macro breakage from the
+# include dirs it adds) and is not needed for sim2sim. Force it off; the
+# future aimdk adapter is a separate ROS2 process, not this binary.
+export HAS_ROS2=0
+
 # Always build to ensure we have the latest version
 echo "Building the project..."
 just build
@@ -531,6 +597,10 @@ echo -e "${CYAN}═════════════════════�
 echo -e "${CYAN}                         DEPLOYMENT CONFIGURATION                       ${NC}"
 echo -e "${CYAN}═══════════════════════════════════════════════════════════════════════${NC}"
 echo ""
+echo -e "  Robot:              ${GREEN}$ROBOT${NC} (binary: $BINARY_NAME)"
+if [[ -n "$ENCODER_MODE" ]]; then
+echo -e "  Encoder mode:       ${GREEN}$ENCODER_MODE${NC} (0=tracking 1=teleop 2=smpl)"
+fi
 echo -e "  Environment:        ${GREEN}$ENV_TYPE${NC}"
 echo -e "  Network Interface:  ${GREEN}$TARGET${NC}"
 echo -e "  Decoder Model:      ${GREEN}$CHECKPOINT_DECODER${NC}"
@@ -550,10 +620,15 @@ echo -e "${CYAN}═════════════════════�
 echo ""
 echo -e "${YELLOW}The following command will be executed:${NC}"
 echo ""
-echo -e "${BLUE}just run g1_deploy_onnx_ref $TARGET $CHECKPOINT_DECODER $MOTION_DATA \\${NC}"
+echo -e "${BLUE}just run $BINARY_NAME $TARGET $CHECKPOINT_DECODER $MOTION_DATA \\${NC}"
 echo -e "${BLUE}    --obs-config $OBS_CONFIG \\${NC}"
 echo -e "${BLUE}    --encoder-file $CHECKPOINT_ENCODER \\${NC}"
+if [[ -n "$PLANNER" ]]; then
 echo -e "${BLUE}    --planner-file $PLANNER \\${NC}"
+fi
+if [[ -n "$ENCODER_MODE" ]]; then
+echo -e "${BLUE}    --initial-encoder-mode $ENCODER_MODE \\${NC}"
+fi
 echo -e "${BLUE}    --input-type $INPUT_TYPE \\${NC}"
 echo -e "${BLUE}    --output-type $OUTPUT_TYPE \\${NC}"
 echo -e "${BLUE}    --zmq-host $ZMQ_HOST${NC}"
@@ -578,10 +653,21 @@ if [[ "$confirm" =~ ^[Yy]$ ]] || [[ -z "$confirm" ]]; then
     echo -e "${GREEN}🚀 Starting deployment...${NC}"
     echo ""
     
-    just run g1_deploy_onnx_ref "$TARGET" "$CHECKPOINT_DECODER" "$MOTION_DATA" \
+    # Build the command with optional planner and extra args
+    PLANNER_ARGS=()
+    if [[ -n "$PLANNER" ]]; then
+        PLANNER_ARGS=(--planner-file "$PLANNER")
+    fi
+    MODE_ARGS=()
+    if [[ -n "$ENCODER_MODE" ]]; then
+        MODE_ARGS=(--initial-encoder-mode "$ENCODER_MODE")
+    fi
+
+    just run "$BINARY_NAME" "$TARGET" "$CHECKPOINT_DECODER" "$MOTION_DATA" \
         --obs-config "$OBS_CONFIG" \
         --encoder-file "$CHECKPOINT_ENCODER" \
-        --planner-file "$PLANNER" \
+        "${PLANNER_ARGS[@]}" \
+        "${MODE_ARGS[@]}" \
         --input-type "$INPUT_TYPE" \
         --output-type "$OUTPUT_TYPE" \
         --zmq-host "$ZMQ_HOST" \

@@ -216,19 +216,42 @@ set_target_properties(
              CXX_STANDARD_REQUIRED ON
              CXX_EXTENSIONS OFF)
 
+# FF Master variant: same sources, FF Master policy parameters (see
+# include/policy_parameters_ffmaster.hpp), selected via the ROBOT_FFMASTER define.
+set(FFMASTER_EXECUTABLE_NAME ffmaster_deploy_onnx_ref)
+add_executable(${FFMASTER_EXECUTABLE_NAME} ${CMAKE_CURRENT_SOURCE_DIR}/src/g1_deploy_onnx_ref.cpp)
+target_include_directories(${FFMASTER_EXECUTABLE_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include/ ${PROJECT_SOURCE_DIR}/src)
+target_link_directories(${FFMASTER_EXECUTABLE_NAME} PRIVATE ${CUDA_LINK_DIRS})
+target_link_libraries(
+  ${FFMASTER_EXECUTABLE_NAME} PRIVATE ${PROJECT_NAME}
+  ${EXE_LIBS}
+)
+target_compile_definitions(${FFMASTER_EXECUTABLE_NAME} PRIVATE ROBOT_FFMASTER=1)
+set_target_properties(
+  ${FFMASTER_EXECUTABLE_NAME}
+  PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/target/release/"
+             OUTPUT_NAME ${FFMASTER_EXECUTABLE_NAME}
+             CXX_STANDARD 20
+             CXX_STANDARD_REQUIRED ON
+             CXX_EXTENSIONS OFF)
+
 # Optional ROS2 support for main executable and tests
 if(rclcpp_FOUND AND std_msgs_FOUND)
   # Load ROS2 configuration (handles both main executable and tests)
   include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/ROS2.cmake)
-  
+
   # Add ROS2 support to main executable (requires msgpack)
   target_include_directories(${EXECUTABLE_NAME} PRIVATE ${ROS2_INCLUDE_DIRS} ${MSGPACK_INCLUDE_DIRS})
   target_link_libraries(${EXECUTABLE_NAME} PRIVATE ${ROS2_LIBS} pthread)
   target_compile_definitions(${EXECUTABLE_NAME} PRIVATE HAS_ROS2=1)
-  
+  target_include_directories(${FFMASTER_EXECUTABLE_NAME} PRIVATE ${ROS2_INCLUDE_DIRS} ${MSGPACK_INCLUDE_DIRS})
+  target_link_libraries(${FFMASTER_EXECUTABLE_NAME} PRIVATE ${ROS2_LIBS} pthread)
+  target_compile_definitions(${FFMASTER_EXECUTABLE_NAME} PRIVATE HAS_ROS2=1)
+
   message(STATUS "✅ ROS2InputHandler support enabled with msgpack")
 else()
   target_compile_definitions(${EXECUTABLE_NAME} PRIVATE HAS_ROS2=0)
+  target_compile_definitions(${FFMASTER_EXECUTABLE_NAME} PRIVATE HAS_ROS2=0)
   message(STATUS "ROS2 not found - building without ROS2InputHandler support")
 endif()
 

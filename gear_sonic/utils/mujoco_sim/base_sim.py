@@ -181,10 +181,13 @@ class DefaultEnv:
                     "The absolute static root will make the simulation unstable."
                 )
 
+        # Auto-reset on fall can be toggled live from the viewer (key '0')
+        self.fall_check_enabled = True
+
         # Enable the elastic band
         if self.config["ENABLE_ELASTIC_BAND"] and self.use_floating_root_link:
             self.elastic_band = ElasticBand()
-            if "g1" in self.config["ROBOT_TYPE"]:
+            if "g1" in self.config["ROBOT_TYPE"] or "ffmaster" in self.config["ROBOT_TYPE"]:
                 if self.config["enable_waist"]:
                     self.band_attached_link = self.mj_model.body("pelvis").id
                 else:
@@ -198,7 +201,7 @@ class DefaultEnv:
                 self.viewer = mujoco.viewer.launch_passive(
                     self.mj_model,
                     self.mj_data,
-                    key_callback=self.elastic_band.MujuocoKeyCallback,
+                    key_callback=self.viewer_key_callback,
                     show_left_ui=False,
                     show_right_ui=False,
                 )
@@ -208,7 +211,11 @@ class DefaultEnv:
         else:
             if self.onscreen:
                 self.viewer = mujoco.viewer.launch_passive(
-                    self.mj_model, self.mj_data, show_left_ui=False, show_right_ui=False
+                    self.mj_model,
+                    self.mj_data,
+                    key_callback=self.viewer_key_callback,
+                    show_left_ui=False,
+                    show_right_ui=False,
                 )
             else:
                 mujoco.mj_forward(self.mj_model, self.mj_data)
@@ -505,9 +512,25 @@ class DefaultEnv:
         if key in ["up", "down", "left", "right"]:
             self.apply_perturbation(key)
 
+    def viewer_key_callback(self, key):
+        """Viewer hotkeys: '0' toggles the fall auto-reset; other keys go to
+        the elastic band handler (7/8/9) when the band exists."""
+        import glfw
+
+        if key == glfw.KEY_0:
+            self.fall_check_enabled = not self.fall_check_enabled
+            print(f"Fall-check auto-reset enabled: {self.fall_check_enabled}")
+        elif getattr(self, "elastic_band", None) is not None:
+            self.elastic_band.MujuocoKeyCallback(key)
+
     def check_fall(self):
         self.fall = False
-        if self.mj_data.qpos[2] < 0.2:
+        if not self.fall_check_enabled:
+            return
+        # Default 0.2 (stock). Ground-level references (military crawl: pelvis
+        # ~0.1 m) need a lower value or the auto-reset fires mid-motion; the
+        # FF Master yaml sets 0.05, and --fall-check-height overrides per session.
+        if self.mj_data.qpos[2] < self.config.get("FALL_CHECK_HEIGHT", 0.2):
             self.fall = True
             print(f"Warning: Robot has fallen, height: {self.mj_data.qpos[2]:.3f} m")
 

@@ -63,6 +63,7 @@
 #include <functional>
 #include <unordered_map>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <chrono>
 #include <algorithm>
@@ -145,6 +146,11 @@
 using namespace unitree::common;
 using namespace unitree::robot;
 using namespace unitree_hg::msg::dds_;
+
+// Test/debug knobs set from main() argument parsing (see --initial-encoder-mode
+// and --dump-obs-file). File-scope to avoid widening the G1Deploy constructor.
+static int g_initial_encoder_mode_override = -100;  // -100 = unset
+static std::string g_dump_obs_path = "";
 
 
 
@@ -1136,11 +1142,20 @@ class G1Deploy {
       // VR 3-point offsets in body's local frame (matching ros2_input_handler.hpp and visualize_motion.py)
       // Order: left_wrist (index 0), right_wrist (index 1), head/torso (index 2)
       // NOTE: Y-axis is mirrored for right wrist (symmetric robot)
+#ifdef ROBOT_FFMASTER
+      // FF Master training used zero wrist offsets (sonic_ffmaster.yaml vr_3point_body_offset)
+      constexpr std::array<std::array<double, 3>, 3> VR_3POINT_OFFSETS = {{
+        {0.0, 0.0, 0.0},       // left wrist offset
+        {0.0, 0.0, 0.0},       // right wrist offset
+        {0.0, 0.0, 0.35}       // head offset (applied to torso body)
+      }};
+#else
       constexpr std::array<std::array<double, 3>, 3> VR_3POINT_OFFSETS = {{
         {0.18, -0.025, 0.0},   // left wrist offset
         {0.18, +0.025, 0.0},   // right wrist offset (Y mirrored for symmetry)
         {0.0, 0.0, 0.35}       // head offset (applied to torso body)
       }};
+#endif
 
       // Apply offsets to body positions to get VR 3-point positions
       std::array<double, 9> vr_3point_position;
@@ -2198,8 +2213,18 @@ class G1Deploy {
                   << kd_scales << std::endl;
       }
       
-      // Initialize ChannelFactory
-      ChannelFactory::Instance()->Init(0, networkInterface);
+      // Initialize ChannelFactory.
+      // DDS domain is env-overridable (FFMASTER_DDS_DOMAIN, default 0 = unchanged
+      // behavior). On the FF Master's Orin the vendor stack exhausts all
+      // domain-0 participant indices ("Failed to find a free participant
+      // index"), so the private loopback link to the aimdk bridge runs on an
+      // empty domain (77) there. Transport-level only; no effect on control.
+      int32_t dds_domain = 0;
+      if (const char* dds_domain_env = std::getenv("FFMASTER_DDS_DOMAIN")) {
+        dds_domain = std::atoi(dds_domain_env);
+        std::cout << "[INFO] FFMASTER_DDS_DOMAIN set: using DDS domain " << dds_domain << std::endl;
+      }
+      ChannelFactory::Instance()->Init(dds_domain, networkInterface);
 
       // Initialize Dex3 hands (ChannelFactory already initialized above)
       dex3_hands_.initialize("");
@@ -2398,6 +2423,13 @@ class G1Deploy {
       // =========================================================================
       // Initialize encode_mode for all loaded reference motions and planner motion
       // =========================================================================
+      // Optional override for testing non-default encoder modes (e.g. smpl=2),
+      // which are unreachable from the keyboard (Z only toggles 0<->1).
+      if (g_initial_encoder_mode_override != -100 && is_using_encoder_) {
+        initial_encoder_mode_ = g_initial_encoder_mode_override;
+        std::cout << "[Override] initial encoder mode set to " << initial_encoder_mode_ << std::endl;
+      }
+
       // Set the encode_mode for all loaded reference motions based on encoder availability
       std::cout << "Setting encode_mode for " << motion_reader_.motions.size() << " loaded reference motions..." << std::endl;
       for (auto& motion : motion_reader_.motions) {
@@ -3121,8 +3153,28 @@ class G1Deploy {
     bool CreatePolicyCommand() {
       // Convert double observation to float and populate policy's internal input buffer
       auto& obs_buffer_float = policy_engine_->GetInputBuffer();
-      for (size_t i = 0; i < obs_buffer_.size(); i++) { 
-        obs_buffer_float[i] = static_cast<float>(obs_buffer_[i]); 
+      for (size_t i = 0; i < obs_buffer_.size(); i++) {
+        obs_buffer_float[i] = static_cast<float>(obs_buffer_[i]);
+      }
+
+      // Parity-gate instrumentation: dump the assembled policy and encoder
+      // input vectors for the first few control ticks (--dump-obs-file).
+      if (!g_dump_obs_path.empty()) {
+        static int dump_tick = 0;
+        if (dump_tick < 15) {
+          std::ofstream f(g_dump_obs_path, dump_tick == 0 ? std::ios::trunc : std::ios::app);
+          f << std::setprecision(9);
+          f << "tick," << dump_tick << ",frame," << current_frame_ << ",policy";
+          for (size_t i = 0; i < obs_buffer_.size(); i++) f << "," << obs_buffer_[i];
+          f << "\n";
+          if (is_using_encoder_ && encoder_engine_) {
+            auto& enc_buf = encoder_engine_->GetInputBuffer();
+            f << "tick," << dump_tick << ",frame," << current_frame_ << ",encoder";
+            for (size_t i = 0; i < enc_buf.size(); i++) f << "," << enc_buf[i];
+            f << "\n";
+          }
+          dump_tick++;
+        }
       }
 
       // Run policy inference (handles CPU→GPU transfer, inference, GPU→CPU transfer)
@@ -4266,6 +4318,24 @@ int main(int argc, char const* argv[]) {
         policyInputLogfile = argv[i + 1];
         std::cout << "[INFO] Using policy input logfile: " << policyInputLogfile << std::endl;
         i++; // Skip the next argument since it's the policy input logfile
+      }
+    } else if (std::string(argv[i]) == "--initial-encoder-mode") {
+      if (i + 1 < argc) {
+        g_initial_encoder_mode_override = std::stoi(argv[i + 1]);
+        std::cout << "[INFO] Initial encoder mode override: " << g_initial_encoder_mode_override << std::endl;
+        i++;
+      } else {
+        std::cerr << "Error: --initial-encoder-mode requires an integer argument" << std::endl;
+        return 1;
+      }
+    } else if (std::string(argv[i]) == "--dump-obs-file") {
+      if (i + 1 < argc) {
+        g_dump_obs_path = argv[i + 1];
+        std::cout << "[INFO] Dumping observation vectors to: " << g_dump_obs_path << std::endl;
+        i++;
+      } else {
+        std::cerr << "Error: --dump-obs-file requires a path argument" << std::endl;
+        return 1;
       }
     } else if (std::string(argv[i]) == "--input-type") {
       if (i + 1 < argc) {
