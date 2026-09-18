@@ -95,7 +95,7 @@ Details for each environment are in NVIDIA's [installation guides](https://nvlab
 
 ### MuJoCo sim2sim
 
-<!-- TODO: sim2sim screen capture (control panel with reference and policy windows) -->
+![Control panel, simulator and reference replay after Drop robot](docs/labs/img/ffmaster_control_panel.jpg)
 
 Two terminals from the repository root:
 

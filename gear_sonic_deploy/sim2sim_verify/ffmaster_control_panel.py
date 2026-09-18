@@ -313,8 +313,8 @@ def main():
     p.add_argument("--decoder", default="policy/ffmaster/model_decoder.onnx")
     p.add_argument("--encoder", default="policy/ffmaster/model_encoder.onnx")
     p.add_argument("--obs-config", default="policy/ffmaster/observation_config.yaml",
-                   help="deploy observation config; the chingmu 2-encoder model "
-                        "needs policy/ffmaster_chingmu/observation_config.yaml (910-wide encoder)")
+                   help="observation config the ONNX pair was exported with; the default is the "
+                        "released sonic_ffmaster model's (two encoders, 910-wide encoder input)")
     p.add_argument("--encoder-mode", type=int, default=None)
     p.add_argument("--with-replay", action="store_true",
                    help="open a second window replaying the reference motion kinematically")

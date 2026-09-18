@@ -77,7 +77,21 @@ python gear_sonic/train_agent_trl.py \
     ++manager_env.commands.motion.motion_lib_cfg.motion_file=data/ffmaster_motions/lab_train
 ```
 
-Start-up takes a few minutes; then a panel refreshes every iteration. Note the `Logging Directory` line; that folder receives your checkpoints (`model_step_000200.pt` … `model_step_001000.pt`). Record `Learning iteration`, `Computation … steps/s` and the `Mean episode …` reward lines at iterations 1, 100 and 500. In W&B plot `Episode_Reward/tracking_vr_5point_local` (1.0 = perfect body tracking) and `Episode_Reward/time_out` (fraction of episodes that finished their clip).
+Start-up takes a few minutes. The first lines to look for, then a panel that refreshes every iteration:
+
+```
+Loading checkpoint from sonic_ffmaster/model_step_006000.pt
+...
+│                          Learning iteration 2                          │
+│                        Computation: 12601 steps/s (Collection: 2.932s,       │
+│                       Mean rewards: 0.39953                                  │
+...
+│ Logging Directory:                                                           │
+│ logs_rl/TRL_FFMaster/manager/universal_token/all_modes/sonic_ffmaster_lab_te │
+│ amA-<timestamp>                                                              │
+```
+
+Note the `Logging Directory` line; that folder receives your checkpoints (`model_step_000200.pt` … `model_step_001000.pt`). Record `Learning iteration`, `Computation … steps/s` and the `Mean episode …` reward lines at iterations 1, 100 and 500. In W&B plot `Episode_Reward/tracking_vr_5point_local` (1.0 = perfect body tracking) and `Episode_Reward/time_out` (fraction of episodes that finished their clip).
 
 One iteration takes a few seconds; the run needs about one to two hours. Leave it running and continue when it finishes.
 
@@ -106,6 +120,8 @@ for step in ("000200", "001000"):
 EOF
 ```
 
+While an evaluation runs, its progress bar shows `Succ rate: 0.000 | Mpjpe: nan`; the real numbers appear only in `metrics_eval.json`, which the snippet above prints.
+
 `mpjpe_l` is body-position error relative to the pelvis (shape of the motion), `mpjpe_g` in the world (also counts drifting away). `FAIL` means the robot drifted more than 0.25 m or tilted more than 1 rad and the episode was cut.
 
 Export both checkpoints and run them in MuJoCo through the C++ runtime (use absolute paths; the sweep reports a pelvis-height pass/fail per clip, `rms` the joint tracking):
@@ -119,6 +135,8 @@ cp gear_sonic_deploy/sim2sim_verify/last_sweep.json results/eval_$STEP/sweep.jso
 $V rms --motion-dir reference/ffmaster_set8/ --motion 06_BG_Normal_Walking_00547 --encoder $E --decoder $D
 done
 ```
+
+The export prints four `Saved to: …/exported/model_step_<STEP>_{g1,teleop,encoder,decoder}.onnx` lines; only the encoder and decoder files are used here. The sweep should end with `[sweep] DONE: 10/10 pass` for the released model; your own checkpoints may fail some clips.
 
 Fill in: checkpoint × (Isaac success, Isaac mpjpe_l, MuJoCo sweep n/10, MuJoCo walk RMS all/legs/arms), plus a row for the released model from Part A.
 
@@ -134,7 +152,7 @@ On the Orin, three shells:
 
 ```
 T-op:  source ~/sonic_deployment/ffmaster_env.sh
-       bash  ~/sonic_deployment/ffmaster_env_gate.sh
+       bash  ~/sonic_deployment/ffmaster_dds_guard.sh                  # idempotent: blocks lab-WiFi ROS discovery
        python3 ~/sonic_deployment/ffmaster_snapshot.py "PRE-SESSION"   # state Business, 4 command publishers, MC publisher 1, robot still
        python3 ~/sonic_deployment/ffmaster_migrate.py Develop_MC        # ~7 s, no motion
        python3 ~/sonic_deployment/ffmaster_snapshot.py "POST-MIGRATE"  # 0 command publishers, MC publisher 0 → bus FREE

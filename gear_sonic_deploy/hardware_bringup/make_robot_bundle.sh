@@ -78,7 +78,7 @@ rm -rf "$STAGE"; mkdir -p "$STAGE/checkpoints" "$STAGE/thirdparty_headers" "$STA
   "$STAGE/gear_sonic/data/assets/robot_description/mjcf"
 
 rsync -a --delete \
-  --exclude build/ --exclude target/ --exclude g1/ --exclude planner/ --exclude policy/release/ \
+  --exclude /build/ --exclude /target/ --exclude /g1/ --exclude /planner/ --exclude /policy/release/ \
   --exclude '*.onnx' --exclude '*.trt' --exclude '__pycache__/' --exclude 'sim2sim_verify/last_*' \
   --exclude 'reference/*/' \
   "$DEPLOY/" "$STAGE/gear_sonic_deploy/"
@@ -119,9 +119,9 @@ if [[ $ARCHIVE -eq 1 ]]; then
   echo "archive: $TGZ  ($(du -sh "$TGZ" | cut -f1))"
   cat <<MSG
 
-Next, from the workstation (existing ws/ and build/ on the Orin are kept):
-  scp $TGZ <orin>:~
-  ssh <orin> 'tar xzf $(basename "$TGZ")'            # unpacks to ~/sonic_deployment
-then follow "On the Orin" in docs/labs/instructor_setup.md to build the bridge and the binary.
+Next, from the workstation (an existing ws/ and build/ on the Orin are kept):
+  scp $TGZ run@<orin>:~
+  ssh run@<orin> 'tar xzf $(basename "$TGZ")'        # unpacks to ~/sonic_deployment
+then continue with "Robot side", step 3 "Build the bridge and the binary", in docs/labs/instructor_setup.md.
 MSG
 fi
