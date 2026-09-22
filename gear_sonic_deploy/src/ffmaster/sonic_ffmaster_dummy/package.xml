@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>sonic_ffmaster_dummy</name>
+  <version>0.1.0</version>
+  <description>
+    Single-joint dummy controller for FF Master — validates the aimdk ROS2
+    transport, the Develop_MC handoff, and the safety skeleton (bus-free gate,
+    staleness watchdog, damping-on-exit) before the SONIC deploy node reuses
+    the same skeleton. Publishes ONLY /aima/hal/joint/arm/command.
+  </description>
+  <maintainer email="eai@ff.com">FF EAI</maintainer>
+  <license>Proprietary</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <!-- aimdk_msgs comes from the HOST, never from a bundled SDK snapshot:
+       robot (.41): /agibot/software/common  (firmware-matched, aarch64)
+       laptop sim : v1.0 prebuilt_x86_64
+       Code only touches fields identical across both versions. -->
+  <depend>aimdk_msgs</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

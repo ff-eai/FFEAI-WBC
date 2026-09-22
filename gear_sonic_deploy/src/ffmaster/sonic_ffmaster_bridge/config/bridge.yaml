@@ -1,0 +1,97 @@
+# sonic_ffmaster_bridge configuration.
+#
+# aimdk side: identical contract to sonic_ffmaster_dummy (verified on hardware).
+# unitree side: impersonates the robot for ffmaster_deploy_onnx_ref, following
+# gear_sonic/utils/mujoco_sim/unitree_sdk2py_bridge.py (FF Master = unitree_hg family,
+# motors 0..28 in FF Master MuJoCo order; imu quaternion is wxyz).
+
+aimdk:
+  state_topics:            # concat order == FF Master MuJoCo motor order 0..28
+    leg:   /aima/hal/joint/leg/state      # motors  0..11
+    waist: /aima/hal/joint/waist/state    # motors 12..14
+    arm:   /aima/hal/joint/arm/state      # motors 15..28
+  command_topics:
+    leg:   /aima/hal/joint/leg/command
+    waist: /aima/hal/joint/waist/command
+    arm:   /aima/hal/joint/arm/command
+    head:  /aima/hal/joint/head/command   # policy-untouched: published limp (full 2-array)
+  pelvis_imu: /aima/hal/imu/torso/state   # IS the pelvis IMU (verified 2026-08-05); xyzw -> wxyz
+  chest_imu:  /aima/hal/imu/chest/state   # -> rt/secondary_imu
+  mc_state:   /aima/mc/common/state       # liveness via graph only, never subscribed
+
+unitree:
+  network_interface: lo    # loopback: binary runs on the same host (deploy.sh sim)
+  # rt/lowstate, rt/secondary_imu, rt/dex3/{left,right}/state published;
+  # rt/lowcmd consumed. Topic names fixed by the binary — not configurable here.
+
+rates:
+  lowstate_hz: 500         # matches real G1 LowState rate the binary expects
+  forward_hz: 500          # aimdk command output rate
+  hand_state_hz: 50        # zero-filled dex3 states (binary tolerates but expects them)
+
+safety:                    # applied to FORWARDED commands (post-binary, pre-bus)
+  # Hardware-validated skeleton values (sonic_ffmaster_dummy):
+  discovery_settle_s: 5.0
+  bus_free_checks: 3
+  check_period_s: 1.0
+  state_stale_ms: 300      # aimdk joint state age -> damp.
+                           #   Measured stream health 2026-08-07: max
+                           #   inter-arrival 21-43 ms, so 300 catches any real
+                           #   outage with ~7x margin while tolerating scheduler
+                           #   jitter on a loaded Orin (150 tripped repeatedly
+                           #   at load ~6-7 with vendor recorder+camera running).
+  state_lost_exit_ms: 2000 # state gap longer than this -> damp exit (real outage)
+  lowcmd_stale_ms: 250     # binary stopped commanding (crash/exit) -> damp
+  exit_damp_kd: 2.0
+  exit_damp_msgs: 100      # 0.2 s of damp messages at forward_hz
+
+  # Per-joint ABSOLUTE target clamp = physical joint limits (vendor MJCF
+  # lx2501_3_t2d5 ranges, shrunk 0.02 rad). This is the hardware safety
+  # requirement (never command past the mechanism) and never fights legitimate
+  # motion tracking — unlike a default-relative clamp, which silently clipped
+  # squats/jumps (knee ceiling 1.469 vs required 2.4). FF Master MuJoCo order.
+  clamp_lo: [-2.684, -0.215, -1.664,  0.020, -0.783, -0.242,
+             -2.684, -2.886, -3.410,  0.020, -0.783, -0.242,
+             -3.410, -0.294, -0.468,
+             -3.060, -0.041, -2.536, -2.336, -2.536, -0.538, -1.551,
+             -3.060, -2.973, -2.536, -2.336, -2.536, -0.538, -0.704]
+  clamp_hi: [ 2.536,  2.886,  3.410,  2.387,  0.433,  0.242,
+              2.536,  0.215,  1.664,  2.387,  0.433,  0.242,
+              2.362,  0.294,  0.468,
+              2.020,  2.973,  2.536, -0.020,  2.536,  0.538,  0.704,
+              2.020,  0.041,  2.536, -0.020,  2.536,  0.538,  1.551]
+  # Gain sanity caps: forwarded kp/kd are clamped to <= cap. Caps = the
+  # vendor/rl-config values (policy_parameters_ffmaster.hpp) * 1.25 headroom.
+  kp_cap: [150.0, 125.0, 125.0, 187.5, 50.0, 50.0,     # L leg (hip_p,hip_r,hip_y,knee,ank_p,ank_r)
+           150.0, 125.0, 125.0, 187.5, 50.0, 50.0,     # R leg
+           50.2,  250.0, 250.0,                        # waist y,p,r
+           62.5, 62.5, 62.5, 62.5, 25.0, 25.0, 25.0,   # L arm
+           62.5, 62.5, 62.5, 62.5, 25.0, 25.0, 25.0]   # R arm
+  kd_cap: 8.0
+  # First-order low-pass on forwarded q_target. 0 = OFF (training-faithful:
+  # IsaacLab and sim2sim both apply raw 50 Hz zero-order-hold targets; an 8 Hz
+  # filter adds ~20 ms group delay and measurably degraded balance on the
+  # vendor sim). Knob for hardware bus smoothness ONLY — if ever enabled, the
+  # SAME value must be re-validated on the vendor sim first. One config for
+  # sim and robot; no per-environment patches.
+  target_lpf_hz: 0.0
+
+# Joint centers for the clamp = policy default_angles (FF Master MuJoCo order,
+# policy_parameters_ffmaster.hpp:223). NOT the vendor stand pose.
+default_angles: [-0.312, 0.0, 0.0, 0.669, -0.363, 0.0,
+                 -0.312, 0.0, 0.0, 0.669, -0.363, 0.0,
+                  0.0, 0.0, 0.0,
+                  0.2,  0.2, 0.0, -0.3, 0.0, 0.0, 0.0,
+                  0.2, -0.2, 0.0, -0.3, 0.0, 0.0, 0.0]
+
+joint_names:   # informational (names are decoration on the wire; index is the contract)
+  leg:   [left_hip_pitch_joint, left_hip_roll_joint, left_hip_yaw_joint, left_knee_joint,
+          left_ankle_pitch_joint, left_ankle_roll_joint,
+          right_hip_pitch_joint, right_hip_roll_joint, right_hip_yaw_joint, right_knee_joint,
+          right_ankle_pitch_joint, right_ankle_roll_joint]
+  waist: [waist_yaw_joint, waist_pitch_joint, waist_roll_joint]
+  arm:   [left_shoulder_pitch_joint, left_shoulder_roll_joint, left_shoulder_yaw_joint,
+          left_elbow_joint, left_wrist_yaw_joint, left_wrist_pitch_joint, left_wrist_roll_joint,
+          right_shoulder_pitch_joint, right_shoulder_roll_joint, right_shoulder_yaw_joint,
+          right_elbow_joint, right_wrist_yaw_joint, right_wrist_pitch_joint, right_wrist_roll_joint]
+  head:  [head_yaw_joint, head_pitch_joint]

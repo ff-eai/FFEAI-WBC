@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+  FastDDS profile for sonic_ffmaster_bridge ON THE ROBOT (PC2 / 10.0.1.41) ONLY.
+
+  Do NOT use this for vendor-sim rehearsals on a workstation: it hard-codes the
+  robot's develop0 address. Sim uses ROS_LOCALHOST_ONLY=1 instead.
+
+  It does two things:
+
+  1. UDPv4 only, shared memory DISABLED  (inherited from fastdds_udp_only.xml)
+     The robot's /dev/shm FastDDS pool accumulates segments across process
+     restarts and goes bad (observed 2026-08-11: 34 segments, 13 orphaned, one
+     LIVE process holding a mapping to a deleted segment). Once corrupted, a new
+     participant's endpoint creation fails and — critically — that failure takes
+     down the participant's EXISTING subscriptions too. Symptom: bridge reaches
+     ACTIVE, creates its 4 command publishers, and 0.5 s later its joint-state
+     stream goes permanently stale while the deploy binary never gets rt/lowstate.
+
+  2. Interface whitelist: develop0 (+ loopback) only.
+     PC2 is the ONLY board on both the robot's internal network (10.0.1.x) and
+     the lab WiFi. PC1 — which owns hal_ethercat and actually
+     drives the motors — is internal-only.
+
+     Verified 2026-08-11 from PC1: it sees 30 nodes and CANNOT see the foreign
+     `motion_control_node` running on a lab workstation.
+     DDS discovery is multicast and does not cross the two subnets, so that node
+     has no path to any motor. A unicast route does exist (PC2 has ip_forward=1)
+     but the two never discover each other, so it is never used.
+
+     Without this whitelist the bridge — uniquely, because it sits on both
+     networks — sees that node and its bus-free gate refuses to arm over a
+     publisher that cannot reach the robot. Restricting to develop0 makes the
+     gate's view match the bus it is actually protecting: it now sees exactly
+     what PC1 sees. This does NOT weaken the gate. A rogue publisher on the
+     10.0.1.x network itself is still detected, which is the case that matters.
+
+     Side benefit: drops ~45 lab-WiFi DDS participants from the bridge's
+     discovery workload (they were driving ksoftirqd to ~56% and eating the
+     scheduling margin the 50 Hz control loop needs).
+
+  Failure mode if the address below is ever wrong: the bridge receives no joint
+  states, stays in WAIT_STATE, and never creates command publishers. It cannot
+  emit commands, because commands are only ever built from received state.
+
+  Usage (bridge terminal on the robot, before launching):
+      export FASTRTPS_DEFAULT_PROFILES_FILE=<this file>
+  Affects the bridge's ROS/aimdk side only. The unitree side is CycloneDDS
+  (FFMASTER_DDS_DOMAIN=77, loopback) and is not touched by this file.
+-->
+<dds xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+  <profiles>
+    <transport_descriptors>
+      <transport_descriptor>
+        <transport_id>udp_develop0</transport_id>
+        <type>UDPv4</type>
+        <interfaceWhiteList>
+          <address>10.0.1.41</address>   <!-- develop0: the real robot bus -->
+          <address>127.0.0.1</address>   <!-- loopback: local ROS plumbing -->
+        </interfaceWhiteList>
+      </transport_descriptor>
+    </transport_descriptors>
+
+    <participant profile_name="robot_isolated_participant" is_default_profile="true">
+      <rtps>
+        <userTransports>
+          <transport_id>udp_develop0</transport_id>
+        </userTransports>
+        <!-- do not add the builtin SHM/UDP transports on top of ours -->
+        <useBuiltinTransports>false</useBuiltinTransports>
+      </rtps>
+    </participant>
+  </profiles>
+</dds>

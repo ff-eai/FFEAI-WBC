@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+  FastDDS profile: UDPv4 only, shared memory DISABLED, for sonic_ffmaster_bridge.
+
+  Why: the robot's /dev/shm FastDDS pool accumulates segments across process
+  restarts and goes bad (observed 2026-08-11: 34 segments, 13 orphaned, one
+  LIVE process holding a mapping to a deleted segment). Once corrupted, a new
+  participant's endpoint creation fails with
+
+      Existing Port NNNN NOT Healthy / Failed to create port segment: File exists
+      SHM Listener on port NNNN failure: port marked as not ok
+
+  and — critically — that failure takes down the participant's EXISTING
+  subscriptions too. Symptom seen: the bridge reached ACTIVE, created its 4
+  command publishers, and 0.5 s later its joint-state stream went permanently
+  stale while the deploy binary never received rt/lowstate.
+
+  Disabling SHM keeps the bridge entirely out of that shared pool: it can no
+  longer be broken by vendor-process churn, and cannot contribute to it.
+  Cost: UDP loopback instead of SHM — microseconds at 500 Hz / ~1 kB messages,
+  irrelevant against the 20 ms control period.
+
+  Usage (bridge terminal, before launching):
+      export FASTRTPS_DEFAULT_PROFILES_FILE=<this file>
+  Note this affects the bridge's ROS/aimdk side only. The unitree side is
+  CycloneDDS (FFMASTER_DDS_DOMAIN=77) and has SHM off by default.
+-->
+<dds xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+  <profiles>
+    <transport_descriptors>
+      <transport_descriptor>
+        <transport_id>udp_only_transport</transport_id>
+        <type>UDPv4</type>
+      </transport_descriptor>
+    </transport_descriptors>
+
+    <participant profile_name="udp_only_participant" is_default_profile="true">
+      <rtps>
+        <userTransports>
+          <transport_id>udp_only_transport</transport_id>
+        </userTransports>
+        <!-- do not add the builtin SHM/UDP transports on top of ours -->
+        <useBuiltinTransports>false</useBuiltinTransports>
+      </rtps>
+    </participant>
+  </profiles>
+</dds>

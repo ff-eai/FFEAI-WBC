@@ -1,0 +1,76 @@
+# FF Master deploy - observation configuration (two-encoder model)
+# ==================================================================
+# For the ONNX pair exported from a sonic_ffmaster checkpoint:
+#   python gear_sonic/eval_agent_trl.py +checkpoint=<run>/model_step_NNNNNN.pt \
+#       +headless=True ++num_envs=1 +export_onnx_only=true
+#
+# Policy (decoder) input: 994 = token_state(64) + proprioception(930)
+# Encoder input: 910 = encoder_mode(3: scalar index + 2 zeros)
+#   + ref joint pos/vel 10 frames step5 (290+290)
+#   + motion_anchor_orientation (6) + motion_anchor_orientation_10frame_step5 (60)
+#   + lower-body ref pos/vel 10 frames step5 (120+120)
+#   + vr_3point pos/orn (9+12)
+#
+# Entry order below must not change: the C++ concatenates in this order and
+# the exported graph indexes by fixed offsets. The binary checks the summed
+# dimensions against the engines at start-up.
+
+observations:
+
+  - name: "token_state"
+    enabled: true
+
+  - name: "his_base_angular_velocity_10frame_step1"
+    enabled: true
+
+  - name: "his_body_joint_positions_10frame_step1"
+    enabled: true
+
+  - name: "his_body_joint_velocities_10frame_step1"
+    enabled: true
+
+  - name: "his_last_actions_10frame_step1"
+    enabled: true
+
+  - name: "his_gravity_dir_10frame_step1"
+    enabled: true
+
+encoder:
+  dimension: 64
+  use_fp16: false
+  encoder_observations:
+    - name: "encoder_mode"
+      enabled: true
+    - name: "motion_joint_positions_10frame_step5"
+      enabled: true
+    - name: "motion_joint_velocities_10frame_step5"
+      enabled: true
+    - name: "motion_anchor_orientation"
+      enabled: true
+    - name: "motion_anchor_orientation_10frame_step5"
+      enabled: true
+    - name: "motion_joint_positions_lowerbody_10frame_step5"
+      enabled: true
+    - name: "motion_joint_velocities_lowerbody_10frame_step5"
+      enabled: true
+    - name: "vr_3point_local_target"
+      enabled: true
+    - name: "vr_3point_local_orn_target"
+      enabled: true
+  encoder_modes:
+    - name: "g1"
+      mode_id: 0
+      required_observations:
+        - encoder_mode
+        - motion_joint_positions_10frame_step5
+        - motion_joint_velocities_10frame_step5
+        - motion_anchor_orientation_10frame_step5
+    - name: "teleop"
+      mode_id: 1
+      required_observations:
+        - encoder_mode
+        - motion_joint_positions_lowerbody_10frame_step5
+        - motion_joint_velocities_lowerbody_10frame_step5
+        - vr_3point_local_target
+        - vr_3point_local_orn_target
+        - motion_anchor_orientation
