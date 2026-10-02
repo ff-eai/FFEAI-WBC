@@ -4,6 +4,7 @@ In-house whole-body control framework for FF robots, based on NVIDIA [GR00T-Whol
 
 ## News
 
+- **[2026-10]** `ffmaster_sonic_v0.2`: an updated checkpoint of the same run (50,000 iterations), plus a keyboard-driven **kinematic planner** that drives the policy without changing the deploy binary. See [Kinematic planner](#kinematic-planner).
 - **[2026-09]** First FF Master SONIC checkpoint released (`ffmaster_sonic_v0.1`, early training snapshot). Models and configs are updated progressively as training and evaluation progress. See [Model Card](#model-card).
 - **[2026-09]** Unitree G1 → FF Master retarget of the ChingMU MotionDecode dataset released on Hugging Face, with an interactive web viewer. See [Motion Data](#motion-data).
 
@@ -14,6 +15,7 @@ In-house whole-body control framework for FF robots, based on NVIDIA [GR00T-Whol
 - [Model Card](#model-card)
 - [Setup](#setup)
 - [Usage](#usage)
+- [Kinematic planner](#kinematic-planner)
 - [Motion Data](#motion-data)
 - [SONIC Training](#sonic-training)
 - [What's Included](#whats-included)
@@ -54,9 +56,10 @@ SONIC is a motion-tracking whole-body controller: one policy reads a reference m
 
 | Model | Training data | Iterations | Encoder modes | Status |
 |---|---|---|---|---|
-| **ffmaster_sonic_v0.1** | FF Master retarget of ChingMU MotionDecode (36k clips, ~358 h), trained from scratch with `sonic_ffmaster` at 8 × 16,384 environments | 6,000 | 0 = motion tracking, 1 = VR 3-point teleop | early snapshot: stands, tracks gestures and basic gaits in MuJoCo; not yet converged |
+| **ffmaster_sonic_v0.2** | FF Master retarget of ChingMU MotionDecode (36k clips, ~358 h), trained from scratch with `sonic_ffmaster` at 8 × 16,384 environments | 50,000 | 0 = motion tracking, 1 = VR 3-point teleop | updated checkpoint: success 0.93 / mpjpe_l 30.5 mm on the 512-clip eval subset (not yet at the >0.97 usually taken as converged); MuJoCo sim2sim tracking RMS 7–8° on gaits, gestures and the planner stream |
+| ffmaster_sonic_v0.1 | same run | 6,000 | 0, 1 | early snapshot, kept for reference (`assets-v0.1` release) |
 
-The model has no SMPL encoder (the dataset has no SMPL pairing), so encoder mode 2 is not available. Later checkpoints of the same run will replace this entry as training progresses; each release states its iteration count and evaluation. Test every new checkpoint in simulation before running it on a robot.
+The model has no SMPL encoder (the dataset has no SMPL pairing), so encoder mode 2 is not available. Each release states its iteration count and evaluation. Test every new checkpoint in simulation before running it on a robot.
 
 ### Release files
 
@@ -64,9 +67,10 @@ The model, the robot meshes, reference motion sets and lab data are not kept in 
 
 | Bundle | Contents | Installed to |
 |---|---|---|
-| `ffmaster_sonic_v0.1` | `model_encoder.onnx` (910 → 64), `model_decoder.onnx` (994 → 29), `observation_config.yaml`, fused `model_g1.onnx` / `model_teleop.onnx`, PyTorch `model_step_006000.pt` + `config.yaml` | `gear_sonic_deploy/policy/ffmaster/`, `sonic_ffmaster/` |
+| `ffmaster_sonic_v0.2` | `model_encoder.onnx` (910 → 64), `model_decoder.onnx` (994 → 29), `observation_config.yaml`, fused `model_g1.onnx` / `model_teleop.onnx`, PyTorch `model_step_050000.pt` + `config.yaml` | `gear_sonic_deploy/policy/ffmaster/`, `sonic_ffmaster/` |
 | `ffmaster_reference_sets` | `ffmaster_set8` (10 indexed clips), `chingmu_ffmaster_gantry_small` (3), `chingmu_ffmaster_loco_small` (5), `chingmu_ffmaster_gantry` (25), `chingmu_ffmaster_loco` (25) | `gear_sonic_deploy/reference/` |
 | `ffmaster_lab_data` | `lab_train` (50 clips) and `lab_eval` (10 clips) in training format | `data/ffmaster_motions/` |
+| `ffmaster_planner_db` | `ffmaster_loco_db.npz`: motion-matching database of the kinematic planner, 348 locomotion clips + mirrors (140 MB) | `data/kplanner/` |
 | `ffmaster_robot_meshes` | the 45 STL meshes referenced by the FF Master MJCF and URDF | `gear_sonic/data/assets/robot_description/{mjcf,urdf/ffmaster}/meshes/` |
 
 ## Setup
@@ -77,7 +81,8 @@ The model, the robot meshes, reference motion sets and lab data are not kept in 
 git clone https://github.com/ff-eai/FFEAI-WBC.git
 cd FFEAI-WBC
 git lfs pull
-bash download_ffmaster_assets.sh          # model + robot meshes + reference sets + lab data (~650 MB)
+bash download_ffmaster_assets.sh          # model + robot meshes + reference sets + lab data + planner database (~800 MB)
+# add --exclude-planner-db to skip the 140 MB planner database
 ```
 
 | I want to... | Environment | How to install |
@@ -140,10 +145,19 @@ The policy binary runs on FF Master's onboard Orin through a ROS 2 bridge (`gear
 # on the Orin, three shells
 python3 ~/sonic_deployment/ffmaster_migrate.py Develop_MC     # hand the joint bus to the bridge
 ~/sonic_deployment/ffmaster_bridge.sh                          # bridge: wait for ACTIVE
-~/sonic_deployment/ffmaster_sonic.sh ffmaster_set8 006000      # policy: wait for Init Done, then ]
+~/sonic_deployment/ffmaster_sonic.sh ffmaster_set8 050000      # policy: wait for Init Done, then ]
 ```
 
 Use the gantry and follow the procedure in [`docs/labs/sonic_ffmaster_lab.md`](docs/labs/sonic_ffmaster_lab.md) (Part D) and [`docs/labs/instructor_setup.md`](docs/labs/instructor_setup.md). Recording and offline evaluation of a session: `ffmaster_record.py`, `ffmaster_eval.py`.
+
+## Kinematic planner
+
+Drive the policy from the keyboard instead of a prerecorded clip. The planner (`gear_sonic_deploy/kplanner/`, Python) turns forward, lateral and yaw-rate commands into a continuously re-planned reference by motion matching over a database of FF Master locomotion clips, and streams it into the unchanged deploy binary on its ZMQ `pose` input. Walk, jog, run, backward walk, turning and curves; keys are momentary and combine. A gamepad input is planned. Setup, controls, the automated sim test and the real-robot procedure are in [`gear_sonic_deploy/kplanner/README.md`](gear_sonic_deploy/kplanner/README.md).
+
+```bash
+# T1 simulator, T2 policy with --input-type zmq (] , 9 in MuJoCo, ENTER), T3 planner:
+.venv_sim/bin/python gear_sonic_deploy/kplanner/ffmaster_kplanner_stream.py --input keyboard   # g, then hold w/a/s/d/q/e
+```
 
 ## Motion Data
 
@@ -193,7 +207,7 @@ accelerate launch --num_processes=8 gear_sonic/train_agent_trl.py \
 # Fine-tune from the released checkpoint (single GPU shown)
 python gear_sonic/train_agent_trl.py \
     +exp=manager/universal_token/all_modes/sonic_ffmaster \
-    +checkpoint=sonic_ffmaster/model_step_006000.pt \
+    +checkpoint=sonic_ffmaster/model_step_050000.pt \
     num_envs=4096 headless=True exp_var=finetune \
     ++manager_env.commands.motion.motion_lib_cfg.motion_file=data/chingmu/sets/chingmu_train_v1
 
@@ -220,6 +234,7 @@ Multi-node training, W&B logging and the adaptive-sampling options are unchanged
 - **`gear_sonic_deploy`**: C++ inference stack with the FF Master binary target, ROS 2 bridge (`src/ffmaster/sonic_ffmaster_bridge`), robot session scripts (`hardware_bringup/`), sim2sim tools (`sim2sim_verify/`)
 - **`gear_sonic`**: SONIC training stack with the FF Master embodiment (`envs/manager_env/robots/ffmaster.py`), configuration (`config/exp/.../sonic_ffmaster.yaml`), data converters with `--robot ffmaster`, MuJoCo simulator configuration
 - **`gear_sonic/data/assets/robot_description`**: FF Master MJCF (`mjcf/ffmaster_sonic_29dof.xml`, `mjcf/ffmaster_scene_29dof.xml`) and URDF (`urdf/ffmaster/`); the meshes come from the release bundle
+- **`gear_sonic_deploy/kplanner`**: motion-matching kinematic planner (database builder, planner, ZMQ streamer, sim test)
 - **`tools/chingmu`**: staging, validation, trimming and set-building tools for the retargeted MotionDecode data
 - **`docs/labs`**: a hands-on lab that uses this stack to teach learned whole-body control
 - **`download_ffmaster_assets.sh`**: fetches the model, robot meshes, reference sets and lab data

@@ -6,10 +6,13 @@
 #   ./ffmaster_sonic.sh                      # default gantry list, default checkpoint step
 #   ./ffmaster_sonic.sh ffmaster_set8              # other motion list, default checkpoint
 #   ./ffmaster_sonic.sh ffmaster_set8 006000       # list + checkpoint step
+#   ./ffmaster_sonic.sh ffmaster_set8 050000 192.168.1.20   # + ZMQ host of an external reference source
 #
 #   arg 1  motion list  — name under reference/ (or a full path). Default: chingmu_ffmaster_gantry_small
 #   arg 2  checkpoint   — step number under checkpoints/ (or "model_step_NNNNNN").
 #                         Default: 006000 (the released ffmaster_sonic_v0.1 checkpoint)
+#   arg 3  ZMQ host     — machine that publishes the "pose" reference stream (e.g. the laptop running
+#                         kplanner/ffmaster_kplanner_stream.py). Default: localhost. Env ZMQ_HOST also works.
 #
 # After start, VERIFY in the log:
 #   "Found N motion folders"  — N must match the list you asked for
@@ -26,6 +29,7 @@ DEPLOY="$SONIC/gear_sonic_deploy"
 # ---- arguments --------------------------------------------------------------
 MOTIONS="${1:-chingmu_ffmaster_gantry_small}"
 CKPT="${2:-006000}"
+ZMQ_HOST="${3:-${ZMQ_HOST:-localhost}}"
 
 case "$MOTIONS" in
   */*) MOTION_DIR="$MOTIONS" ;;                       # path given
@@ -94,4 +98,4 @@ exec ./target/release/ffmaster_deploy_onnx_ref lo \
   --encoder-file "$ENCODER" \
   --policy-input-logfile "$LOGDIR/policy_input.csv" \
   --target-motion-logfile "$LOGDIR/target_motion.csv" \
-  --input-type manager --output-type all --zmq-host localhost --disable-crc-check
+  --input-type manager --output-type all --zmq-host "$ZMQ_HOST" --disable-crc-check
