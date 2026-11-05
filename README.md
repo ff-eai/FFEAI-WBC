@@ -256,6 +256,4 @@ We would like to acknowledge the following projects and datasets that this work 
 
 ## License
 
-This repository's original content is released for **non-commercial research, education, and community use only**.
-
-Third-party components retain their own licenses: NVIDIA GR00T-WholeBodyControl and SOMA Retargeter (Apache-2.0), ChingMU MotionDecode (see the dataset card). This project may download and install additional third-party open-source components. Review their license terms before use.
+Apache License 2.0, the same as upstream NVIDIA GR00T-WholeBodyControl. See [LICENSE](LICENSE) and [NOTICE](NOTICE); third-party components (NVIDIA, the FF Master robot description under Mulan PSL v2, ChingMU MotionDecode data, Unitree and XRoboToolkit SDKs) keep their own licenses, listed in NOTICE and under `legal/`.
