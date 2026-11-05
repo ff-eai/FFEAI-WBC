@@ -1,0 +1,28 @@
+FFEAI-WBC
+Copyright (c) 2026 Faraday & Future Inc.
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This repository is a fork of NVIDIA GR00T-WholeBodyControl
+(https://github.com/NVlabs/GR00T-WholeBodyControl),
+Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES, Apache License 2.0.
+Upstream files may have been modified; see the git history. NVIDIA's
+third-party notices are kept under legal/.
+
+The FF Master robot description and meshes
+(gear_sonic/data/assets/robot_description/{mjcf,urdf}/ffmaster*, and the
+ffmaster_robot_meshes release asset) are derived from the robot
+manufacturer's published description, Copyright (c) AgiBot, licensed under
+the Mulan PSL v2 (legal/Mulan PSL v2 - FF Master robot description.txt).
+
+Motion data is from the ChingMU MotionDecode library
+(https://chingmudata.github.io/MotionDecode/), retargeted to FF Master with
+the NVIDIA SOMA Retargeter (Apache License 2.0) and used under terms agreed
+with ChingMU. Credit ChingMU MotionDecode when using the data, the reference
+sets, the planner database or models trained on them.
+
+Bundled third-party components keep their own licenses: unitree_sdk2 and
+unitree_sdk2_python (BSD-3-Clause), XRoboToolkit-PC-Service-Pybind (MIT),
+and the DDS libraries under gear_sonic_deploy/thirdparty/unitree_sdk2/licenses.
+Components installed by install_scripts/ and download_ffmaster_assets.sh
+carry their own licenses.
